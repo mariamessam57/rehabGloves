@@ -27,39 +27,98 @@ void input_task(void* pvParam) {
     keypad.setDebounceTime(80);  // ms
 
     TickType_t last_wake = xTaskGetTickCount();
+    static bool        session_active = false;
+    static bool        session_paused = false;
+    static SystemMode  saved_mode     = SystemMode::SAFE_LOCK;
 
     for (;;) {
+        SystemMode current_mode = ss.getMode();
+
+        if (current_mode == SystemMode::PASSIVE ||
+            current_mode == SystemMode::ASSISTIVE ||
+            current_mode == SystemMode::RESISTANCE)
+        {
+            session_active = true;
+        } else if (!session_paused) {
+            session_active = false;
+        }
+
         char key = keypad.getKey();
 
         if (key != NO_KEY) {
             Serial.printf("[INPUT] Key pressed: %c\n", key);
 
-            switch (key) {
-                case '1':  // Passive Mode
-                    if (ss.isCalibComplete() && !ss.isEStop())
-                        ss.setMode(SystemMode::PASSIVE);
-                    break;
+            if (session_active) {
+                switch (key) {
+                    case '1':  // PAUSE / RESUME
+                        if (!session_paused) {
+                            saved_mode = current_mode;
+                            session_paused = true;
+                            ss.setMode(SystemMode::SAFE_LOCK);
+                            ss.setWarning("PAUSED");
+                            Serial.println("[INPUT] Session paused.");
+                        } else {
+                            session_paused = false;
+                            ss.clearWarning();
+                            ss.setMode(saved_mode);
+                            Serial.println("[INPUT] Session resumed.");
+                        }
+                        break;
 
-                case '2':  // Assistive Mode
-                    if (ss.isCalibComplete() && !ss.isEStop())
-                        ss.setMode(SystemMode::ASSISTIVE);
-                    break;
+                    case '2':  // RESTART CALIBRATION FLOW
+                        if (!ss.isEStop()) {
+                            ss.requestRecalibration();
+                            ss.setMode(SystemMode::SAFE_LOCK);
+                            session_active = false;
+                            session_paused = false;
+                            ss.clearWarning();
+                            Serial.println("[INPUT] Calibration restart requested.");
+                        }
+                        break;
 
-                case '3':  // Resistance Mode
-                    if (ss.isCalibComplete() && !ss.isEStop())
-                        ss.setMode(SystemMode::RESISTANCE);
-                    break;
+                    case '3':  // EXIT SESSION
+                        session_active = false;
+                        session_paused = false;
+                        ss.clearWarning();
+                        ss.setMode(SystemMode::SAFE_LOCK);
+                        Serial.println("[INPUT] Session exit requested.");
+                        break;
 
-                case '4':  // ESTOP + Reset + Recalibration
-                    Serial.println("[INPUT] Manual ESTOP + Recalibration triggered.");
-                    // Clear saved calibration so SensorTask re-runs it
-                    {
-                        CalibrationSystem tmp;
-                        tmp.clear();
-                    }
-                    ss.requestRecalibration();
-                    ss.clearEStop();
-                    break;
+                    case '4':  // GLOBAL EMERGENCY STOP
+                        session_active = false;
+                        session_paused = false;
+                        ss.clearWarning();
+                        ss.triggerEStop("MANUAL_OVERRIDE");
+                        ss.setMode(SystemMode::SAFE_LOCK);
+                        Serial.println("[INPUT] Global emergency stop triggered.");
+                        break;
+                }
+            } else {
+                switch (key) {
+                    case '1':  // Passive Mode
+                        if (ss.isCalibComplete() && !ss.isEStop())
+                            ss.setMode(SystemMode::PASSIVE);
+                        break;
+
+                    case '2':  // Assistive Mode
+                        if (ss.isCalibComplete() && !ss.isEStop())
+                            ss.setMode(SystemMode::ASSISTIVE);
+                        break;
+
+                    case '3':  // Resistance Mode
+                        if (ss.isCalibComplete() && !ss.isEStop())
+                            ss.setMode(SystemMode::RESISTANCE);
+                        break;
+
+                    case '4':  // GLOBAL OVERRIDE: Emergency stop + return to menu
+                        session_active = false;
+                        session_paused = false;
+                        ss.clearWarning();
+                        ss.triggerEStop("MANUAL_OVERRIDE");
+                        ss.setMode(SystemMode::SAFE_LOCK);
+                        Serial.println("[INPUT] Global emergency stop triggered.");
+                        break;
+                }
             }
         }
 

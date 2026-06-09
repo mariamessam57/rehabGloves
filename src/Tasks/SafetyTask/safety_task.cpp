@@ -57,6 +57,18 @@ void safety_task(void* pvParam) {
         r = monitor.checkIMU(snap);
         if (!r.ok) { ss.triggerEStop(r.reason); goto estop; }
 
+        r = monitor.checkIMUFlexCorrelation(snap);
+        if (r.ok) {
+            if (r.reason) {
+                ss.setWarning(r.reason);
+            } else {
+                ss.clearWarning();
+            }
+        } else {
+            ss.triggerEStop(r.reason);
+            goto estop;
+        }
+
         r = monitor.checkMotorStall(snap, motors);
         if (!r.ok) { ss.triggerEStop(r.reason); goto estop; }
 

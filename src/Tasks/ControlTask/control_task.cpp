@@ -16,10 +16,16 @@ struct AssistState {
     bool         step_active      = false;
     uint32_t     step_end_ms      = 0;
     uint32_t     stall_start_ms   = 0;
-    MotionIntent last_intent      = MotionIntent::NONE;  // ← الإضافة
+    MotionIntent last_intent      = MotionIntent::NONE;
 };
 static AssistState assist_st;
 static MotorDriver driver;
+static bool     passive_active = false;
+static bool     passive_complete = false;
+static uint32_t passive_start_ms = 0;
+static bool     passive_delay = true;
+static uint32_t passive_delay_ms = 0;
+static float    resist_scale = 1.0f;
 
 // ── Helpers ─────────────────────────────────────────────────────
 static inline float clampf(float v, float lo, float hi) {
@@ -47,9 +53,50 @@ static MotionIntent detectIntent(const SensorSnapshot& snap) {
 
 // ── MODE 1: PASSIVE ──────────────────────────────────────────────
 static void modePassive(const SensorSnapshot& snap, MotorState out[NUM_FINGERS]) {
-    uint32_t now    = millis();
-    float    phase  = (float)(now % PASSIVE_PERIOD_MS) / (float)PASSIVE_PERIOD_MS;
-    float    target = 0.5f * (1.0f - cosf(2.0f * M_PI * phase));
+    uint32_t now = millis();
+
+    if (!passive_active) {
+        passive_active    = true;
+        passive_complete  = false;
+        passive_start_ms  = now;
+        passive_delay_ms  = now;
+        passive_delay     = true;
+    }
+
+    if (passive_complete) {
+        for (int f = 0; f < NUM_FINGERS; f++) {
+            out[f].enabled = false;
+            out[f].target  = 0;
+            out[f].dir     = MotorDir::STOP;
+        }
+        return;
+    }
+
+    if (passive_delay) {
+        if ((now - passive_delay_ms) < PASSIVE_START_DELAY_MS) {
+            for (int f = 0; f < NUM_FINGERS; f++) {
+                out[f].enabled = false;
+                out[f].target  = 0;
+                out[f].dir     = MotorDir::STOP;
+            }
+            return;
+        }
+        passive_delay = false;
+    }
+
+    if ((now - passive_start_ms) >= PASSIVE_RUNTIME_MS + PASSIVE_START_DELAY_MS) {
+        passive_complete = true;
+        for (int f = 0; f < NUM_FINGERS; f++) {
+            out[f].enabled = false;
+            out[f].target  = 0;
+            out[f].dir     = MotorDir::STOP;
+        }
+        return;
+    }
+
+    uint32_t elapsed = (now - passive_start_ms - PASSIVE_START_DELAY_MS) % PASSIVE_PERIOD_MS;
+    float phase  = (float)elapsed / (float)PASSIVE_PERIOD_MS;
+    float target = 0.5f * (1.0f - cosf(2.0f * M_PI * phase));
 
     for (int f = 0; f < NUM_FINGERS; f++) {
         float error = target - snap.flex[f].normalized;
@@ -106,10 +153,10 @@ static void modeAssistive(const SensorSnapshot& snap,
             assist_st.fsr_reached     = true;
             assist_st.patient_force   = snap.fsr.normalized;
             assist_st.force_level     = computeForceLevel(snap.fsr.normalized);
-            assist_st.motor_fraction  = 1.0f - (assist_st.force_level * 0.25f);
+            assist_st.motor_fraction  = clampf(1.0f - snap.fsr.normalized, 0.25f, 1.0f);
             assist_st.assessment_done = true;
-            Serial.printf("[ASSIST] FSR touched. Level=%d Motor=%.0f%%\n",
-                assist_st.force_level, assist_st.motor_fraction * 100.0f);
+            Serial.printf("[ASSIST] FSR touched. Level=%d Force=%.2f Motor=%.0f%%\n",
+                assist_st.force_level, assist_st.patient_force, assist_st.motor_fraction * 100.0f);
             return;
         }
 
@@ -209,13 +256,31 @@ static void modeAssistive(const SensorSnapshot& snap,
 }
 
 // ── MODE 3: RESISTANCE ───────────────────────────────────────────
-static void modeResistance(const SensorSnapshot& snap, MotorState out[NUM_FINGERS]) {
+static void modeResistance(const SensorSnapshot& snap, MotorState out[NUM_FINGERS], SharedState& ss) {
     MotionIntent intent    = detectIntent(snap);
     float        fsr_norm  = snap.fsr.normalized;
-    uint8_t      resist_pw = dutyFromFraction(fsr_norm);
+    float        avg_vel   = 0.0f;
+    for (int f = 0; f < NUM_FINGERS; f++) avg_vel += snap.flex[f].velocity;
+    avg_vel /= (float)NUM_FINGERS;
+
+    if (fsr_norm < 0.15f) {
+        resist_scale = clampf(resist_scale - RESISTIVE_ADAPT_STEP, RESISTIVE_MIN_SCALE, 1.0f);
+    } else {
+        resist_scale = clampf(resist_scale + RESISTIVE_ADAPT_STEP, RESISTIVE_MIN_SCALE, 1.0f);
+    }
+
+    uint8_t base_pw = dutyFromFraction(fsr_norm);
+    uint8_t resist_pw = (uint8_t)clampf((float)base_pw * resist_scale,
+                                       (float)PWM_DUTY_MIN, (float)PWM_DUTY_MAX);
+
+    bool patient_trying = intent != MotionIntent::NONE && fabsf(avg_vel) < INTENT_VEL_THRESH;
+
+    if (resist_pw <= PWM_DUTY_MIN && patient_trying) {
+        ss.setMode(SystemMode::ASSISTIVE);
+        return;
+    }
 
     for (int f = 0; f < NUM_FINGERS; f++) {
-        // Safety: respect flex limits before applying resistance
         float norm = snap.flex[f].normalized;
         bool  at_limit = (norm < 0.03f && intent == MotionIntent::OPENING) ||
                          (norm > 0.97f && intent == MotionIntent::CLOSING);
@@ -229,13 +294,11 @@ static void modeResistance(const SensorSnapshot& snap, MotorState out[NUM_FINGER
 
         switch (intent) {
             case MotionIntent::CLOSING:
-                // resist = apply opening torque
                 out[f].enabled = true;
                 out[f].dir     = MotorDir::FORWARD;
                 out[f].target  = resist_pw;
                 break;
             case MotionIntent::OPENING:
-                // resist = apply closing torque
                 out[f].enabled = true;
                 out[f].dir     = MotorDir::REVERSE;
                 out[f].target  = resist_pw;
@@ -277,12 +340,19 @@ void control_task(void* pvParam) {
         if (prev_mode == SystemMode::ASSISTIVE && mode != SystemMode::ASSISTIVE) {
             assist_st = AssistState{};
         }
+        if (prev_mode == SystemMode::PASSIVE && mode != SystemMode::PASSIVE) {
+            passive_active   = false;
+            passive_complete = false;
+            passive_start_ms = 0;
+            passive_delay    = true;
+            passive_delay_ms = 0;
+        }
         prev_mode = mode;
 
         switch (mode) {
             case SystemMode::PASSIVE:    modePassive   (snap, motors); break;
             case SystemMode::ASSISTIVE:  modeAssistive(snap, motors, ss); break;
-            case SystemMode::RESISTANCE: modeResistance(snap, motors); break;
+            case SystemMode::RESISTANCE: modeResistance(snap, motors, ss); break;
             default:
                 for (int f = 0; f < NUM_FINGERS; f++) motors[f].enabled = false;
                 driver.stopAll();

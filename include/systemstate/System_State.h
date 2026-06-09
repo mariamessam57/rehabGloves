@@ -40,6 +40,11 @@ public:
     void  clearEStop();
     bool  isEStop();
 
+    // ── Safety warnings ──────────────────────────────────────────
+    void  setWarning(const char* warning);
+    void  clearWarning();
+    const char* getWarning();
+
     // ── Calibration ──────────────────────────────────────────────
     bool  isCalibComplete();
     void  setCalibComplete(bool v);
@@ -68,6 +73,7 @@ private:
     bool          _calib_complete = false;
     CalibPhase    _calib_phase    = CalibPhase::IDLE;
     bool          _request_recalib = false;
+    const char*   _warning        = nullptr;
 
     inline bool _take(SemaphoreHandle_t m) {
         bool ok = xSemaphoreTake(m, pdMS_TO_TICKS(10)) == pdTRUE;

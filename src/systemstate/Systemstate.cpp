@@ -77,9 +77,30 @@ void SharedState::clearEStop() {
         _calib_complete = false;
         _calib_phase   = CalibPhase::IDLE;
         _mode          = SystemMode::SAFE_LOCK;
+        _warning       = nullptr;
         xSemaphoreGive(_mtx_mode);
     }
     xEventGroupClearBits(events, EVT_ESTOP | EVT_CALIB_DONE);
+}
+
+void SharedState::setWarning(const char* warning) {
+    if (_take(_mtx_mode)) {
+        _warning = warning;
+        xSemaphoreGive(_mtx_mode);
+    }
+}
+
+void SharedState::clearWarning() {
+    if (_take(_mtx_mode)) {
+        _warning = nullptr;
+        xSemaphoreGive(_mtx_mode);
+    }
+}
+
+const char* SharedState::getWarning() {
+    const char* w = nullptr;
+    if (_take(_mtx_mode)) { w = _warning; xSemaphoreGive(_mtx_mode); }
+    return w;
 }
 
 bool SharedState::isEStop() {

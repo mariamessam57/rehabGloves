@@ -84,6 +84,19 @@
 #define INTENT_VEL_THRESH   0.018f      // normalized/s
 #define ASSISTIVE_DUTY_PCT  0.60f       // 60% of PWM_DUTY_MAX
 #define PASSIVE_PERIOD_MS   3200U       // full sinusoidal cycle
+#define PASSIVE_START_DELAY_MS 800U
+#define PASSIVE_RUNTIME_MS     6400U
+#define ASSIST_FLEX_THRESHOLD  0.25f
+#define ASSIST_ASSESS_MS       400U
+#define ASSIST_STALL_VEL       0.015f
+#define ASSIST_STALL_MS        500U
+#define ASSIST_STEP_MS         200U
+#define ASSIST_STEP_NORM       0.05f
+#define RESISTIVE_ADAPT_STEP   0.04f
+#define RESISTIVE_MIN_SCALE    0.25f
+#define IMU_FLEX_CORR_GYRO_MIN 20.0f
+#define IMU_FLEX_CORR_VEL_MIN  0.02f
+#define IMU_FLEX_CONFLICT_MS   350U
 
 // ─── SYSTEM ─────────────────────────────────────────────────────
 #define NUM_FINGERS         3

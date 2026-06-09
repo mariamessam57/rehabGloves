@@ -82,6 +82,7 @@ SafetyMonitor::Report SafetyMonitor::checkIMUFlexCorrelation(const SensorSnapsho
                 _imu_flex_conflict_start = millis();
             if ((millis() - _imu_flex_conflict_start) >= IMU_FLEX_CONFLICT_MS)
                 return Report(false, "IMU_FLEX_CONFLICT");
+            return Report(true, "IMU_FLEX_WARNING");
         } else {
             _imu_flex_conflict_start = 0;
         }

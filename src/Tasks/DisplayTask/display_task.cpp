@@ -81,10 +81,22 @@ void display_task(void* pvParam) {
         oled.setCursor(0, 36);
         oled.printf("GYRO: %.1f dps", snap.imu.gyro_mag);
 
-        // ── Row 4: Calibration phase ───────────────────────────
-        oled.setCursor(0, 48);
-        oled.print("CAL: ");
-        oled.print(calibStr(cp));
+        if (mode == SystemMode::SAFE_LOCK) {
+            oled.setCursor(0, 48);
+            oled.print("1:PASSIVE 2:ASSIST");
+        } else {
+            // ── Row 4: Calibration phase ───────────────────────────
+            oled.setCursor(0, 48);
+            oled.print("CAL: ");
+            oled.print(calibStr(cp));
+        }
+
+        const char* warning = ss.getWarning();
+        if (warning) {
+            oled.setCursor(0, 56);
+            oled.print("WARN: ");
+            oled.print(warning);
+        }
 
         oled.display();
 

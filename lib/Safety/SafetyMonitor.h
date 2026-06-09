@@ -27,6 +27,9 @@ public:
     Report checkIMU(
         const SensorSnapshot& snap);
 
+    Report checkIMUFlexCorrelation(
+        const SensorSnapshot& snap);
+
     Report checkMotorStall(
         const SensorSnapshot& snap,
         const MotorState motors[NUM_FINGERS]);
@@ -34,4 +37,5 @@ public:
 private:
 
     uint32_t _stall_start[NUM_FINGERS] = {0};
+    uint32_t _imu_flex_conflict_start = 0;
 };

@@ -1,13 +1,12 @@
 #ifndef IMU_SENSOR_H
 #define IMU_SENSOR_H
 #include <Wire.h>
-#include <MPU6050.h>
 #include "../../Filters/Filters.h"
 #include "SystemTypes.h"
 #include "Config.h"
 
 // ================================================================
-//  IMU WRAPPER — MPU6050 + Kalman per gyro axis
+//  IMU WRAPPER — MPU6050 register-level driver + Kalman per gyro axis
 // ================================================================
 class IMUWrapper {
 public:
@@ -20,7 +19,6 @@ public:
     bool    isConnected() const { return _connected; }
 
 private:
-    MPU6050        _mpu;
     KalmanFilter1D _kf[3];     // one per gyro axis
     IMUData        _data;
     bool           _connected = false;
