@@ -45,6 +45,25 @@ void SharedState::readSensors(SensorSnapshot& out) {
     }
 }
 
+void SharedState::readSystemSnapshot(SensorSnapshot& out, SystemMode& mode,
+                                     bool& estop, const char*& warning,
+                                     CalibPhase& calib_phase, bool& calib_complete)
+{
+    if (_take(_mtx_mode)) {
+        mode           = _mode;
+        estop          = _estop;
+        warning        = _warning;
+        calib_phase    = _calib_phase;
+        calib_complete = _calib_complete;
+
+        if (_take(_mtx_sensors)) {
+            out = _sensors;
+            xSemaphoreGive(_mtx_sensors);
+        }
+        xSemaphoreGive(_mtx_mode);
+    }
+}
+
 // ── Motors ───────────────────────────────────────────────────────
 void SharedState::writeMotors(const MotorState motors[NUM_FINGERS]) {
     if (_take(_mtx_motors)) {

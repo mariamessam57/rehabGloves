@@ -19,7 +19,6 @@ struct AssistState {
     MotionIntent last_intent      = MotionIntent::NONE;
 };
 static AssistState assist_st;
-static MotorDriver driver;
 static bool     passive_active = false;
 static bool     passive_complete = false;
 static uint32_t passive_start_ms = 0;
@@ -162,9 +161,9 @@ static void modeAssistive(const SensorSnapshot& snap,
 
         if ((now - assist_st.assess_start_ms) >= ASSIST_ASSESS_MS) {
             if (avg_norm < ASSIST_FLEX_THRESHOLD) {
-                Serial.println("[ASSIST] Weak effort → back to Mode 1");
-                ss.setMode(SystemMode::PASSIVE);
-                assist_st = AssistState{};
+                assist_st.motor_fraction  = 0.75f;
+                assist_st.assessment_done = true;
+                Serial.println("[ASSIST] Weak effort, continuing with low assist");
             } else {
                 assist_st.motor_fraction  = 1.0f;
                 assist_st.assessment_done = true;
@@ -179,12 +178,18 @@ static void modeAssistive(const SensorSnapshot& snap,
         assist_st.motor_fraction * (float)PWM_DUTY_MAX,
         (float)PWM_DUTY_MIN, (float)PWM_DUTY_MAX);
 
-    bool patient_moving = fabsf(avg_vel) > ASSIST_STALL_VEL;
+    bool patient_moving = false;
+    for (int f = 0; f < NUM_FINGERS; f++) {
+        if (fabsf(snap.flex[f].velocity) > ASSIST_STALL_VEL) {
+            patient_moving = true;
+            break;
+        }
+    }
 
     if (assist_st.step_active) {
         if (now < assist_st.step_end_ms) {
-            float error = assist_st.step_target - avg_norm;
             for (int f = 0; f < NUM_FINGERS; f++) {
+                float error = assist_st.step_target - snap.flex[f].normalized;
                 if (fabsf(error) > 0.02f) {
                     out[f].enabled = true;
                     out[f].dir     = (error > 0.0f) ? MotorDir::REVERSE : MotorDir::FORWARD;
@@ -211,7 +216,7 @@ static void modeAssistive(const SensorSnapshot& snap,
         assist_st.stall_start_ms = 0;
         MotionIntent intent = detectIntent(snap);
         if (intent != MotionIntent::NONE)
-            assist_st.last_intent = intent;  // ← الإضافة
+            assist_st.last_intent = intent;
         for (int f = 0; f < NUM_FINGERS; f++) {
             if (intent == MotionIntent::CLOSING) {
                 out[f].enabled = true;
@@ -233,20 +238,18 @@ static void modeAssistive(const SensorSnapshot& snap,
     if (assist_st.stall_start_ms == 0)
         assist_st.stall_start_ms = now;
 
-// بعد التعديل
     if ((now - assist_st.stall_start_ms) >= ASSIST_STALL_MS) {
-        // حدد اتجاه الـ step بناءً على آخر حركة للمريض
-        float step_dir = (assist_st.last_intent == MotionIntent::OPENING) 
-                         ? -ASSIST_STEP_NORM 
-                         :  ASSIST_STEP_NORM;  // default: closing
-        assist_st.step_target    = clampf(avg_norm + step_dir, 0.0f, 1.0f);
-        assist_st.step_active    = true;
-        assist_st.step_end_ms    = now + ASSIST_STEP_MS;
+        float step_dir = (assist_st.last_intent == MotionIntent::OPENING)
+                         ? -ASSIST_STEP_NORM
+                         :  ASSIST_STEP_NORM;
+        assist_st.step_target = clampf(avg_norm + step_dir, 0.0f, 1.0f);
+        assist_st.step_active = true;
+        assist_st.step_end_ms = now + ASSIST_STEP_MS;
         assist_st.stall_start_ms = 0;
         Serial.printf("[ASSIST] Step → target=%.3f dir=%s\n",
             assist_st.step_target,
             (step_dir < 0) ? "OPEN" : "CLOSE");
-    }else {
+    } else {
         for (int f = 0; f < NUM_FINGERS; f++) {
             out[f].enabled = false;
             out[f].target  = 0;
@@ -276,7 +279,12 @@ static void modeResistance(const SensorSnapshot& snap, MotorState out[NUM_FINGER
     bool patient_trying = intent != MotionIntent::NONE && fabsf(avg_vel) < INTENT_VEL_THRESH;
 
     if (resist_pw <= PWM_DUTY_MIN && patient_trying) {
-        ss.setMode(SystemMode::ASSISTIVE);
+        Serial.println("[RESIST] Resistance too low for active intent, holding position");
+        for (int f = 0; f < NUM_FINGERS; f++) {
+            out[f].enabled = false;
+            out[f].target  = 0;
+            out[f].dir     = MotorDir::STOP;
+        }
         return;
     }
 
@@ -320,7 +328,7 @@ void control_task(void* pvParam) {
     xEventGroupWaitBits(ss.events, EVT_CALIB_DONE,
                         pdFALSE, pdTRUE, portMAX_DELAY);
 
-    driver.begin();
+    getMotorDriver().begin();
 
     TickType_t    last_wake = xTaskGetTickCount();
     SensorSnapshot snap;
@@ -329,13 +337,18 @@ void control_task(void* pvParam) {
     for (;;) {
         // ESTOP guard
         if (ss.isEStop()) {
-            driver.disableAll();
+            getMotorDriver().disableAll();
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
         static SystemMode prev_mode = SystemMode::SAFE_LOCK;
-        ss.readSensors(snap);
-        SystemMode mode = ss.getMode();
+        const char* warning = nullptr;
+        SystemMode mode = SystemMode::SAFE_LOCK;
+        bool estop = false;
+        CalibPhase calib_phase = CalibPhase::IDLE;
+        bool calib_complete = false;
+
+        ss.readSystemSnapshot(snap, mode, estop, warning, calib_phase, calib_complete);
 
         if (prev_mode == SystemMode::ASSISTIVE && mode != SystemMode::ASSISTIVE) {
             assist_st = AssistState{};
@@ -355,13 +368,13 @@ void control_task(void* pvParam) {
             case SystemMode::RESISTANCE: modeResistance(snap, motors, ss); break;
             default:
                 for (int f = 0; f < NUM_FINGERS; f++) motors[f].enabled = false;
-                driver.stopAll();
+                getMotorDriver().stopAll();
                 break;
         }
 
         // Apply ramping to each motor
         for (int f = 0; f < NUM_FINGERS; f++) {
-            driver.applyRamp(motors[f], f);
+            getMotorDriver().applyRamp(motors[f], f);
         }
 
         // Publish motor states for safety monitor

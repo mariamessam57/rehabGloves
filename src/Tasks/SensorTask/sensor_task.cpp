@@ -71,7 +71,7 @@ void sensor_task(void* pvParam) {
 
     for (;;) {
         // Recalibration request or missing calibration
-        if (ss.shouldRecalibrate() || !ss.isCalibComplete()) {
+        if (!ss.isEStop() && (ss.shouldRecalibrate() || !ss.isCalibComplete())) {
             ss.setMode(SystemMode::CALIBRATING);
             FlexCalib new_calib[NUM_FINGERS];
             bool ok = calib_sys.runCalibration(FLEX_PINS, new_calib, phase_cb);

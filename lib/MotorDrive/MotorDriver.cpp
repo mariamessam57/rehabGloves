@@ -56,7 +56,17 @@ MotorDriver::MotorDriver()
     }
 {}
 
+static MotorDriver g_motorDriver;
+
+MotorDriver& getMotorDriver() {
+    return g_motorDriver;
+}
+
 void MotorDriver::begin() {
+    if (!_mtx) {
+        _mtx = xSemaphoreCreateMutex();
+        configASSERT(_mtx);
+    }
     static bool ledc_initialized = false;
 
     if (!ledc_initialized) {
@@ -72,8 +82,13 @@ void MotorDriver::begin() {
         ledc_initialized = true;
     }
 
-    for (int i = 0; i < NUM_FINGERS; i++) {
-        _ch[i].begin();
+    if (xSemaphoreTake(_mtx, pdMS_TO_TICKS(5)) == pdTRUE) {
+        for (int i = 0; i < NUM_FINGERS; i++) {
+            _ch[i].begin();
+        }
+        xSemaphoreGive(_mtx);
+    } else {
+        Serial.println("[MOTOR] begin mutex timeout");
     }
 }
 
@@ -82,7 +97,10 @@ void MotorDriver::applyRamp(MotorState& state, int finger_index) {
 
     if (!state.enabled) {
         state.current = 0;
-        _ch[finger_index].stop();
+        if (xSemaphoreTake(_mtx, pdMS_TO_TICKS(5)) == pdTRUE) {
+            _ch[finger_index].stop();
+            xSemaphoreGive(_mtx);
+        }
         return;
     }
 
@@ -95,11 +113,21 @@ void MotorDriver::applyRamp(MotorState& state, int finger_index) {
         else state.current -= PWM_RAMP_STEP;
     }
 
-    _ch[finger_index].set(state.dir, state.current);
+    if (xSemaphoreTake(_mtx, pdMS_TO_TICKS(5)) == pdTRUE) {
+        _ch[finger_index].set(state.dir, state.current);
+        xSemaphoreGive(_mtx);
+    } else {
+        Serial.println("[MOTOR] applyRamp mutex timeout");
+    }
 }
 
 void MotorDriver::stopAll() {
-    for (int i = 0; i < NUM_FINGERS; i++) _ch[i].stop();
+    if (xSemaphoreTake(_mtx, pdMS_TO_TICKS(5)) == pdTRUE) {
+        for (int i = 0; i < NUM_FINGERS; i++) _ch[i].stop();
+        xSemaphoreGive(_mtx);
+    } else {
+        Serial.println("[MOTOR] stopAll mutex timeout");
+    }
 }
 
 void MotorDriver::disableAll() {

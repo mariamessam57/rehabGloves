@@ -1,6 +1,8 @@
 #ifndef MOTOR_DRIVER_H
 #define MOTOR_DRIVER_H
 #include <Arduino.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "SystemTypes.h"
 #include "Config.h"
 
@@ -42,5 +44,8 @@ public:
 
 private:
     MotorChannel _ch[NUM_FINGERS];
+    SemaphoreHandle_t _mtx = nullptr;
 };
+
+MotorDriver& getMotorDriver();
 #endif

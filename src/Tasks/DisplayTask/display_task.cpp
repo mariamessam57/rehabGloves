@@ -50,12 +50,14 @@ void display_task(void* pvParam) {
 
     TickType_t    last_wake = xTaskGetTickCount();
     SensorSnapshot snap;
+    SystemMode mode = SystemMode::SAFE_LOCK;
+    bool       estop = false;
+    CalibPhase cp   = CalibPhase::IDLE;
+    bool       calib_complete = false;
 
     for (;;) {
-        ss.readSensors(snap);
-        SystemMode mode   = ss.getMode();
-        bool       estop  = ss.isEStop();
-        CalibPhase cp     = ss.getCalibPhase();
+        const char* warning = nullptr;
+        ss.readSystemSnapshot(snap, mode, estop, warning, cp, calib_complete);
 
         oled.clearDisplay();
 
@@ -68,7 +70,7 @@ void display_task(void* pvParam) {
         // ── Row 1: System state ────────────────────────────────
         oled.setCursor(0, 12);
         oled.print("STATE: ");
-        oled.print(estop ? "ESTOP" : (snap.calib_complete ? "ACTIVE" : "CALIB"));
+        oled.print(estop ? "ESTOP" : (calib_complete ? "ACTIVE" : "CALIB"));
 
         // ── Row 2: Flex values ─────────────────────────────────
         oled.setCursor(0, 24);
@@ -91,7 +93,6 @@ void display_task(void* pvParam) {
             oled.print(calibStr(cp));
         }
 
-        const char* warning = ss.getWarning();
         if (warning) {
             oled.setCursor(0, 56);
             oled.print("WARN: ");

@@ -29,8 +29,9 @@ public:
 
     // ── Sensor snapshot (written by SensorTask) ──────────────────
     void writeSensors(const SensorSnapshot& snap);
-    void readSensors(SensorSnapshot& out);
-
+    void readSensors(SensorSnapshot& out);    void  readSystemSnapshot(SensorSnapshot& out, SystemMode& mode,
+                             bool& estop, const char*& warning,
+                             CalibPhase& calib_phase, bool& calib_complete);
     // ── Motor commands (written by ControlTask) ───────────────────
     void  writeMotors(const MotorState motors[NUM_FINGERS]);
     void  readMotors(MotorState out[NUM_FINGERS]);

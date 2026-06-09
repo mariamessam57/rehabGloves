@@ -108,15 +108,13 @@ void IMUWrapper::sample() {
 
     if (mag_raw > IMU_SPIKE_DEGS) {
         _data.spike = true;
-        // Do not update Kalman on spike
+        // Keep last valid gyro output on spike and do not corrupt filtered state.
     } else {
         _data.spike = false;
         for (int i = 0; i < 3; i++) {
             _data.gyro[i] = _kf[i].update(raw_g[i]);
         }
     }
-
-    mpu6050_computeAngle(raw_g, _data.gyro);
 
     _data.accel[0] = (float)ax / ACCEL_SCALE;
     _data.accel[1] = (float)ay / ACCEL_SCALE;
@@ -128,6 +126,7 @@ void IMUWrapper::sample() {
 
     _last_update_ms = millis();
     _data.last_ms   = _last_update_ms;
+    _data.stuck     = false;
     _detectAnomalies();
 }
 

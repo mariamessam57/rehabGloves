@@ -7,47 +7,34 @@
 
 static SafetyMonitor monitor;
 
-// Separate hardware-kill driver instance for safety task
-// (safety must never wait on control task's driver object)
-static MotorDriver kill_driver;
-static bool        kill_driver_ready = false;
-
-static void buzzerInit() {
-    pinMode(PIN_BUZZER, OUTPUT);
-    digitalWrite(PIN_BUZZER, LOW);
-}
-
-static void buzzerPulse() {
-    digitalWrite(PIN_BUZZER, HIGH);
-    vTaskDelay(pdMS_TO_TICKS(150));
-    digitalWrite(PIN_BUZZER, LOW);
-    vTaskDelay(pdMS_TO_TICKS(150));
-}
-
 // ================================================================
 void safety_task(void* pvParam) {
     SharedState& ss = SharedState::get();
-    buzzerInit();
-
-    // Initialize kill driver independently
-    kill_driver.begin();
-    kill_driver_ready = true;
-    kill_driver.stopAll();
 
     TickType_t last_wake = xTaskGetTickCount();
     SensorSnapshot snap;
     MotorState     motors[NUM_FINGERS];
 
+    getMotorDriver().begin();
+    getMotorDriver().disableAll();
+
     for (;;) {
-        // If already in ESTOP, just pulse buzzer and loop
-        if (ss.isEStop()) {
-            if (kill_driver_ready) kill_driver.disableAll();
-            buzzerPulse();
-            continue;  // no DelayUntil, buzzer timing controls loop
+        bool estop_active = ss.isEStop();
+        TickType_t now = xTaskGetTickCount();
+
+        if (estop_active) {
+            getMotorDriver().disableAll();
+            vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(PERIOD_SAFETY_MS));
+            continue;
         }
 
         ss.readSensors(snap);
         ss.readMotors(motors);
+
+        if ((millis() - snap.imu.last_ms) > (PERIOD_SENSOR_MS * 4)) {
+            ss.triggerEStop("SENSOR_STALE");
+            goto estop;
+        }
 
         SafetyMonitor::Report r;
 
@@ -76,7 +63,7 @@ void safety_task(void* pvParam) {
         continue;
 
     estop:
-        if (kill_driver_ready) kill_driver.disableAll();
+        getMotorDriver().disableAll();
         Serial.println("[SAFETY] *** EMERGENCY STOP ***");
         last_wake = xTaskGetTickCount(); // reset timing after estop
     }

@@ -28,9 +28,6 @@
 #define PIN_COL0            15
 #define PIN_COL1            16
 
-// ─── BUZZER ─────────────────────────────────────────────────────
-#define PIN_BUZZER          32
-
 // ─── PWM (LEDC) ─────────────────────────────────────────────────
 #define PWM_FREQ_HZ         20000U
 #define PWM_RESOLUTION_BITS 8           // 0–255
