@@ -1,0 +1,202 @@
+﻿Processing esp32dev (platform: espressif32@6.5.0; board: esp32dev; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html
+PLATFORM: Espressif 32 (6.5.0) > Espressif ESP32 Dev Module
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20014.231204 (2.0.14) 
+ - tool-esptoolpy @ 1.40501.0 (4.5.1) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 43 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Adafruit SSD1306 @ 2.5.16
+|-- Adafruit GFX Library @ 1.12.6
+|-- Keypad @ 3.1.1
+|-- MPU6050 @ 1.4.4
+|-- Wire @ 2.0.0
+|-- Sensors
+Building in release mode
+Linking .pio\build\esp32dev\firmware.elf
+platformio.exe : c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/
+../lib/gcc/xtensa-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio
+\build\esp32dev\src\Tasks\ControlTask\control_task.cpp.o:(.literal._Z12control_
+taskPv+0x38): undefined reference to `MotorDriver::begin()'
+At line:1 char:1
++ & "C:\Users\dell\.platformio\penv\Scripts\platformio.exe" run > build ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (c:/users/dell/....river::begin()' 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\ControlTask\control_task.cpp.o:(.literal._Z12control_taskPv+0x3c): 
+undefined reference to `MotorDriver::disableAll()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\ControlTask\control_task.cpp.o:(.literal._Z12control_taskPv+0x40): 
+undefined reference to `MotorDriver::stopAll()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\ControlTask\control_task.cpp.o:(.literal._Z12control_taskPv+0x44): 
+undefined reference to `MotorDriver::applyRamp(MotorState&, int)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\ControlTask\control_task.cpp.o:(.literal.startup._GLOBAL__sub_I__Z12co
+ntrol_taskPv+0x0): undefined reference to `MotorDriver::MotorDriver()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: 
+.pio\build\esp32dev\src\Tasks\ControlTask\control_task.cpp.o: in function 
+`control_task(void*)':
+C:\Users\dell\Documents\PlatformIO\Projects\rehabGloves/src/Tasks/ControlTask/c
+ontrol_task.cpp:161: undefined reference to `MotorDriver::begin()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/ControlTask/control_task.cpp:136: 
+undefined reference to `MotorDriver::disableAll()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/ControlTask/control_task.cpp:149: 
+undefined reference to `MotorDriver::stopAll()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/ControlTask/control_task.cpp:149: 
+undefined reference to `MotorDriver::applyRamp(MotorState&, int)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/ControlTask/control_task.cpp:154: 
+undefined reference to `MotorDriver::applyRamp(MotorState&, int)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/ControlTask/control_task.cpp:161: 
+undefined reference to `MotorDriver::applyRamp(MotorState&, int)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: 
+.pio\build\esp32dev\src\Tasks\ControlTask\control_task.cpp.o: in function 
+`_GLOBAL__sub_I__Z12control_taskPv':
+C:\Users\dell\Documents\PlatformIO\Projects\rehabGloves/src/Tasks/ControlTask/c
+ontrol_task.cpp:12: undefined reference to `MotorDriver::MotorDriver()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\InputTask\input_task.cpp.o:(.literal._Z10input_taskPv+0xc): undefined 
+reference to `CalibrationSystem::CalibrationSystem()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\InputTask\input_task.cpp.o:(.literal._Z10input_taskPv+0x10): 
+undefined reference to `CalibrationSystem::clear()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\InputTask\input_task.cpp.o:(.literal._Z10input_taskPv+0x14): 
+undefined reference to `Preferences::~Preferences()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: 
+.pio\build\esp32dev\src\Tasks\InputTask\input_task.cpp.o: in function 
+`input_task(void*)':
+C:\Users\dell\Documents\PlatformIO\Projects\rehabGloves/src/Tasks/InputTask/inp
+ut_task.cpp:57: undefined reference to `CalibrationSystem::CalibrationSystem()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/InputTask/input_task.cpp:58: 
+undefined reference to `CalibrationSystem::clear()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: 
+.pio\build\esp32dev\src\Tasks\InputTask\input_task.cpp.o: in function 
+`CalibrationSystem::~CalibrationSystem()':
+C:\Users\dell\Documents\PlatformIO\Projects\rehabGloves/lib/Calibration/Calibra
+tion.h:14: undefined reference to `Preferences::~Preferences()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/lib/Calibration/Calibration.h:14: undefined 
+reference to `Preferences::~Preferences()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\SafetyTask\safety_task.cpp.o:(.literal._Z11safety_taskPv+0x10): 
+undefined reference to `SafetyMonitor::checkFlex(SensorSnapshot const&)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\SafetyTask\safety_task.cpp.o:(.literal._Z11safety_taskPv+0x14): 
+undefined reference to `SafetyMonitor::checkIMU(SensorSnapshot const&)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\SafetyTask\safety_task.cpp.o:(.literal._Z11safety_taskPv+0x18): 
+undefined reference to `SafetyMonitor::checkMotorStall(SensorSnapshot const&, 
+MotorState const*)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: 
+.pio\build\esp32dev\src\Tasks\SafetyTask\safety_task.cpp.o: in function 
+`safety_task(void*)':
+C:\Users\dell\Documents\PlatformIO\Projects\rehabGloves/src/Tasks/SafetyTask/sa
+fety_task.cpp:33: undefined reference to `MotorDriver::begin()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/SafetyTask/safety_task.cpp:34: 
+undefined reference to `MotorDriver::stopAll()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/SafetyTask/safety_task.cpp:39: 
+undefined reference to `MotorDriver::disableAll()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/SafetyTask/safety_task.cpp:24: 
+undefined reference to `SafetyMonitor::checkFlex(SensorSnapshot const&)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/SafetyTask/safety_task.cpp:50: 
+undefined reference to `MotorDriver::disableAll()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/SafetyTask/safety_task.cpp:55: 
+undefined reference to `SafetyMonitor::checkIMU(SensorSnapshot const&)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/SafetyTask/safety_task.cpp:67: 
+undefined reference to `SafetyMonitor::checkMotorStall(SensorSnapshot const&, 
+MotorState const*)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: 
+.pio\build\esp32dev\src\Tasks\SafetyTask\safety_task.cpp.o: in function 
+`_GLOBAL__sub_I__Z11safety_taskPv':
+C:\Users\dell\Documents\PlatformIO\Projects\rehabGloves/src/Tasks/SafetyTask/sa
+fety_task.cpp:57: undefined reference to `MotorDriver::MotorDriver()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\SensorTask\sensor_task.cpp.o:(.literal._Z11sensor_taskPv+0x3c): 
+undefined reference to `CalibrationSystem::load(FlexCalib*)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: .pio\build\esp32dev\s
+rc\Tasks\SensorTask\sensor_task.cpp.o:(.literal._Z11sensor_taskPv+0x40): 
+undefined reference to `CalibrationSystem::runCalibration(unsigned char 
+const*, FlexCalib*, void (*)(CalibPhase))'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: 
+.pio\build\esp32dev\src\Tasks\SensorTask\sensor_task.cpp.o: in function 
+`sensor_task(void*)':
+C:\Users\dell\Documents\PlatformIO\Projects\rehabGloves/src/Tasks/SensorTask/se
+nsor_task.cpp:45: undefined reference to `CalibrationSystem::load(FlexCalib*)'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: C:\Users\dell\Documen
+ts\PlatformIO\Projects\rehabGloves/src/Tasks/SensorTask/sensor_task.cpp:92: 
+undefined reference to `CalibrationSystem::runCalibration(unsigned char 
+const*, FlexCalib*, void (*)(CalibPhase))'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: 
+.pio\build\esp32dev\src\Tasks\SensorTask\sensor_task.cpp.o: in function 
+`FlexSensor::setCalib(FlexCalib const&)':
+C:\Users\dell\Documents\PlatformIO\Projects\rehabGloves/lib/Sensors/Flex_sensor
+/FlexSensor.h:18: undefined reference to 
+`CalibrationSystem::CalibrationSystem()'
+c:/users/dell/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa
+-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld.exe: 
+.pio\build\esp32dev\src\Tasks\SensorTask\sensor_task.cpp.o: in function 
+`CalibrationSystem::~CalibrationSystem()':
+C:\Users\dell\Documents\PlatformIO\Projects\rehabGloves/lib/Sensors/Flex_sensor
+/FlexSensor.h:18: undefined reference to `Preferences::~Preferences()'
+collect2.exe: error: ld returned 1 exit status
+*** [.pio\build\esp32dev\firmware.elf] Error 1
+========================== [FAILED] Took 7.33 seconds 
+==========================
