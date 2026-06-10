@@ -1,50 +1,78 @@
 #include "Calibration.h"
 #include <Arduino.h>
 
-CalibrationSystem::CalibrationSystem() {}
+CalibrationSystem::CalibrationSystem() {
+    // Constructor intentionally left empty; Preferences initializes on first use.
+}
 
-bool CalibrationSystem::runCalibration(
+bool CalibrationSystem::startPhase(
+    CalibPhase phase,
     const uint8_t flex_pins[NUM_FINGERS],
-    FlexCalib out_calib[NUM_FINGERS],
-    void (*phase_cb)(CalibPhase))
+    FlexCalib out_calib[NUM_FINGERS])
 {
     static float bufs[NUM_FINGERS][CALIB_SAMPLES_MAX];
     int sample_count = 0;
 
-    // ── PHASE 1: OPEN HAND ──────────────────────────────────────
-    if (phase_cb) phase_cb(CalibPhase::OPEN_HAND);
-    Serial.println("[CALIB] Phase 1: Open hand...");
-    _collectSamples(flex_pins, bufs, sample_count, CALIB_DURATION_MS);
-
-    for (int f = 0; f < NUM_FINGERS; f++) {
-        out_calib[f].min_raw = SigmaFilter::compute(
-            bufs[f], sample_count, CALIB_SIGMA);
+    if (phase == CalibPhase::OPEN_HAND)
+    {
+        Serial.println("[CALIB] WAITING: OPEN HAND");
+        vTaskDelay(pdMS_TO_TICKS(1000)); // give user time
+    }
+    else
+    {
+        Serial.println("[CALIB] WAITING: CLOSE HAND");
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    // ── PHASE 2: CLOSE HAND ─────────────────────────────────────
-    if (phase_cb) phase_cb(CalibPhase::CLOSE_HAND);
-    Serial.println("[CALIB] Phase 2: Close hand...");
     _collectSamples(flex_pins, bufs, sample_count, CALIB_DURATION_MS);
 
-    for (int f = 0; f < NUM_FINGERS; f++) {
-        out_calib[f].max_raw = SigmaFilter::compute(
-            bufs[f], sample_count, CALIB_SIGMA);
+    for (int f = 0; f < NUM_FINGERS; f++)
+    {
+        float value = SigmaFilter::compute(bufs[f], sample_count, CALIB_SIGMA);
 
-        // Validate range
-        float range = out_calib[f].max_raw - out_calib[f].min_raw;
-        if (range < (float)CALIB_MIN_RANGE) {
-            Serial.printf("[CALIB] Finger %d range too small: %.1f\n", f, range);
-            if (phase_cb) phase_cb(CalibPhase::FAILED);
-            return false;
+        if (phase == CalibPhase::OPEN_HAND)
+            out_calib[f].min_raw = value;
+        else
+            out_calib[f].max_raw = value;
+    }
+
+    // validation only after CLOSE
+    if (phase == CalibPhase::CLOSE_HAND)
+    {
+        for (int f = 0; f < NUM_FINGERS; f++)
+        {
+            float range = out_calib[f].max_raw - out_calib[f].min_raw;
+
+            if (range < CALIB_MIN_RANGE)
+            {
+                Serial.printf("[CALIB] FAIL F%d range=%.1f\n", f, range);
+                return false;
+            }
+
+            out_calib[f].valid = true;
         }
-        out_calib[f].valid = true;
-        Serial.printf("[CALIB] F%d min=%.0f max=%.0f range=%.0f\n",
-            f, out_calib[f].min_raw, out_calib[f].max_raw, range);
+    }
+
+    return true;
+}
+
+bool CalibrationSystem::runCalibration(
+    const uint8_t flex_pins[NUM_FINGERS],
+    FlexCalib out_calib[NUM_FINGERS],
+    void (*phase_cb)(CalibPhase)
+)
+{
+    if (phase_cb) phase_cb(CalibPhase::OPEN_HAND);
+    if (!startPhase(CalibPhase::OPEN_HAND, flex_pins, out_calib)) {
+        return false;
+    }
+
+    if (phase_cb) phase_cb(CalibPhase::CLOSE_HAND);
+    if (!startPhase(CalibPhase::CLOSE_HAND, flex_pins, out_calib)) {
+        return false;
     }
 
     if (phase_cb) phase_cb(CalibPhase::DONE);
-    save(out_calib);
-    Serial.println("[CALIB] Done — saved to NVS.");
     return true;
 }
 

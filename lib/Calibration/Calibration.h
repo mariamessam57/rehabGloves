@@ -37,6 +37,12 @@ public:
 private:
     Preferences _prefs;
 
+    bool startPhase(
+        CalibPhase phase,
+        const uint8_t flex_pins[NUM_FINGERS],
+        FlexCalib out_calib[NUM_FINGERS]
+    );
+
     void _collectSamples(
         const uint8_t pins[NUM_FINGERS],
         float bufs[NUM_FINGERS][CALIB_SAMPLES_MAX],

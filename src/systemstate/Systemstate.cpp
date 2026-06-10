@@ -92,11 +92,12 @@ void SharedState::triggerEStop(const char* reason) {
 
 void SharedState::clearEStop() {
     if (_take(_mtx_mode)) {
-        _estop         = false;
-        _calib_complete = false;
-        _calib_phase   = CalibPhase::IDLE;
-        _mode          = SystemMode::SAFE_LOCK;
-        _warning       = nullptr;
+        _estop             = false;
+        _calib_complete    = false;
+        _calib_in_progress = false;
+        _calib_phase       = CalibPhase::IDLE;
+        _mode              = SystemMode::SAFE_LOCK;
+        _warning           = nullptr;
         xSemaphoreGive(_mtx_mode);
     }
     xEventGroupClearBits(events, EVT_ESTOP | EVT_CALIB_DONE);
@@ -149,10 +150,21 @@ CalibPhase SharedState::getCalibPhase() {
     return p;
 }
 
+bool SharedState::isCalibInProgress() {
+    bool v = false;
+    if (_take(_mtx_mode)) { v = _calib_in_progress; xSemaphoreGive(_mtx_mode); }
+    return v;
+}
+
+void SharedState::setCalibInProgress(bool v) {
+    if (_take(_mtx_mode)) { _calib_in_progress = v; xSemaphoreGive(_mtx_mode); }
+}
+
 void SharedState::requestRecalibration() {
     if (_take(_mtx_mode)) {
-        _request_recalib = true;
-        _calib_complete = false;
+        _request_recalib     = true;
+        _calib_complete      = false;
+        _calib_in_progress   = false;
         xSemaphoreGive(_mtx_mode);
     }
 }

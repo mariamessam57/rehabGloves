@@ -49,45 +49,46 @@ void sensor_task(void* pvParam) {
         for (int f = 0; f < NUM_FINGERS; f++) flex[f].setCalib(loaded[f]);
         ss.setCalibPhase(CalibPhase::DONE);
         ss.setCalibComplete(true);
+        ss.setCalibInProgress(false);
         xEventGroupSetBits(ss.events, EVT_CALIB_DONE);
         Serial.println("[SENSOR] Calibration loaded from NVS.");
     } else {
-        // Run fresh calibration
+        // Request calibration and wait for user confirmation first
+        ss.requestRecalibration();
         ss.setMode(SystemMode::CALIBRATING);
-        FlexCalib new_calib[NUM_FINGERS];
-        bool ok = calib_sys.runCalibration(FLEX_PINS, new_calib, phase_cb);
-
-        if (!ok) {
-            ss.triggerEStop("CALIB_FAILED");
-            vTaskDelete(nullptr);
-        }
-        for (int f = 0; f < NUM_FINGERS; f++) flex[f].setCalib(new_calib[f]);
-        ss.setCalibComplete(true);
-        ss.clearRecalibrationRequest();
-        xEventGroupSetBits(ss.events, EVT_CALIB_DONE);
+        ss.setCalibPhase(CalibPhase::IDLE);
+        ss.setCalibComplete(false);
+        ss.setCalibInProgress(false);
+        Serial.println("[SENSOR] Waiting to start calibration.");
     }
 
     TickType_t last_wake = xTaskGetTickCount();
 
     for (;;) {
-        // Recalibration request or missing calibration
-        if (!ss.isEStop() && (ss.shouldRecalibrate() || !ss.isCalibComplete())) {
-            ss.setMode(SystemMode::CALIBRATING);
-            FlexCalib new_calib[NUM_FINGERS];
-            bool ok = calib_sys.runCalibration(FLEX_PINS, new_calib, phase_cb);
-            if (!ok) {
-                ss.triggerEStop("CALIB_FAILED");
-                vTaskDelete(nullptr);
+        if (!ss.isEStop() && ss.shouldRecalibrate() && !ss.isCalibInProgress()) {
+            if (ss.getCalibPhase() != CalibPhase::IDLE) {
+                ss.setCalibInProgress(true);
+                ss.setMode(SystemMode::CALIBRATING);
+
+                FlexCalib new_calib[NUM_FINGERS];
+                bool ok = calib_sys.runCalibration(FLEX_PINS, new_calib, phase_cb);
+                if (!ok) {
+                    ss.setCalibInProgress(false);
+                    ss.triggerEStop("CALIB_FAILED");
+                    vTaskDelete(nullptr);
+                }
+                for (int f = 0; f < NUM_FINGERS; f++) flex[f].setCalib(new_calib[f]);
+                ss.setCalibComplete(true);
+                ss.clearRecalibrationRequest();
+                ss.setCalibInProgress(false);
+                ss.setMode(SystemMode::SAFE_LOCK);
+                xEventGroupSetBits(ss.events, EVT_CALIB_DONE);
+                Serial.println("[SENSOR] Calibration completed.");
             }
-            for (int f = 0; f < NUM_FINGERS; f++) flex[f].setCalib(new_calib[f]);
-            ss.setCalibComplete(true);
-            ss.clearRecalibrationRequest();
-            xEventGroupSetBits(ss.events, EVT_CALIB_DONE);
-            Serial.println("[SENSOR] Recalibration completed.");
         }
 
-        // Skip if ESTOP
-        if (ss.isEStop()) {
+        // Skip if ESTOP or if calibration is actively running
+        if (ss.isEStop() || ss.isCalibInProgress()) {
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }

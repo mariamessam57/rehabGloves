@@ -48,6 +48,26 @@ void input_task(void* pvParam) {
         if (key != NO_KEY) {
             Serial.printf("[INPUT] Key pressed: %c\n", key);
 
+            if (current_mode == SystemMode::CALIBRATING) {
+                if (ss.getCalibPhase() == CalibPhase::IDLE) {
+                    if (key == '1' || key == '2') {
+                        ss.setCalibPhase(CalibPhase::OPEN_HAND);
+                        ss.clearWarning();
+                        Serial.printf("[INPUT] Move prompt answered: %s\n",
+                            (key == '1') ? "CAN MOVE" : "CANNOT MOVE");
+                    }
+                } else if (key == '4') {
+                    session_active = false;
+                    session_paused = false;
+                    ss.clearWarning();
+                    ss.triggerEStop("MANUAL_OVERRIDE");
+                    ss.setMode(SystemMode::SAFE_LOCK);
+                    Serial.println("[INPUT] Global emergency stop triggered.");
+                }
+                vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(PERIOD_INPUT_MS));
+                continue;
+            }
+
             if (session_active) {
                 switch (key) {
                     case '1':  // PAUSE / RESUME
@@ -68,7 +88,9 @@ void input_task(void* pvParam) {
                     case '2':  // RESTART CALIBRATION FLOW
                         if (!ss.isEStop()) {
                             ss.requestRecalibration();
-                            ss.setMode(SystemMode::SAFE_LOCK);
+                            ss.setMode(SystemMode::CALIBRATING);
+                            ss.setCalibPhase(CalibPhase::IDLE);
+                            ss.setCalibComplete(false);
                             session_active = false;
                             session_paused = false;
                             ss.clearWarning();

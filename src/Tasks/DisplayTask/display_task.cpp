@@ -85,12 +85,19 @@ void display_task(void* pvParam) {
 
         if (mode == SystemMode::SAFE_LOCK) {
             oled.setCursor(0, 48);
-            oled.print("1:P 2:A 3:R 4:E");
+            if (calib_complete && cp == CalibPhase::DONE) {
+                oled.print("CAL: DONE 1:P 2:A 3:R 4:E");
+            } else {
+                oled.print("1:P 2:A 3:R 4:E");
+            }
         } else {
-            // ── Row 4: Calibration phase ───────────────────────────
             oled.setCursor(0, 48);
-            oled.print("CAL: ");
-            oled.print(calibStr(cp));
+            if (mode == SystemMode::CALIBRATING && cp == CalibPhase::IDLE) {
+                oled.print("MOVE? 1:Y 2:N");
+            } else {
+                oled.print("CAL: ");
+                oled.print(calibStr(cp));
+            }
         }
 
         if (warning) {
