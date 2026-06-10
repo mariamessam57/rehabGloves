@@ -85,7 +85,7 @@ void display_task(void* pvParam) {
 
         if (mode == SystemMode::SAFE_LOCK) {
             oled.setCursor(0, 48);
-            oled.print("1:PASSIVE 2:ASSIST");
+            oled.print("1:P 2:A 3:R 4:E");
         } else {
             // ── Row 4: Calibration phase ───────────────────────────
             oled.setCursor(0, 48);

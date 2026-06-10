@@ -3,30 +3,30 @@
 
 
 // ─── ADC PINS ───────────────────────────────────────────────────
-#define PIN_FLEX_0          36      // VP  – Finger 0
-#define PIN_FLEX_1          39      // VN  – Finger 1
+#define PIN_FLEX_0          32      // VP  – Finger 0
+#define PIN_FLEX_1          33      // VN  – Finger 1
 #define PIN_FLEX_2          34      //     – Finger 2
 #define PIN_FSR             35      //     – Force Sensor
 
 // ─── MOTOR PINS (DRV8833) ───────────────────────────────────────
 #define PIN_M0_IN1          18
 #define PIN_M0_IN2          19
-#define PIN_M1_IN1          21
-#define PIN_M1_IN2          22
-#define PIN_M2_IN1          23
-#define PIN_M2_IN2          25
+#define PIN_M1_IN1          25
+#define PIN_M1_IN2          26
+#define PIN_M2_IN1          27
+#define PIN_M2_IN2          23
 
 // ─── I2C ────────────────────────────────────────────────────────
-#define PIN_SDA             26
-#define PIN_SCL             27
+#define PIN_SDA             21
+#define PIN_SCL             22
 
 // ─── KEYPAD (1×4 via 2 rows × 2 cols) ──────────────────────────
 #define KEYPAD_ROWS         2
 #define KEYPAD_COLS         2
 #define PIN_ROW0            13
 #define PIN_ROW1            14
-#define PIN_COL0            15
-#define PIN_COL1            16
+#define PIN_COL0            4
+#define PIN_COL1            5
 
 // ─── PWM (LEDC) ─────────────────────────────────────────────────
 #define PWM_FREQ_HZ         20000U
@@ -75,6 +75,7 @@
 #define IMU_SPIKE_DEGS      480.0f      // deg/s spike threshold
 #define STALL_TIMEOUT_MS    2000U
 #define STALL_VEL_THRESH    0.004f
+#define FSR_TOUCHED_THRESH  0.15f
 
 // ─── CONTROL PARAMETERS ─────────────────────────────────────────
 #define INTENT_GYRO_THRESH  14.0f       // deg/s

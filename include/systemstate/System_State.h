@@ -7,6 +7,7 @@
 #include "freertos/event_groups.h"
 #include "SystemTypes.h"
 #include "Config.h"
+#include<Arduino.h>
 
 
 

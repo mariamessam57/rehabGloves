@@ -31,12 +31,12 @@ void safety_task(void* pvParam) {
         ss.readSensors(snap);
         ss.readMotors(motors);
 
+        SafetyMonitor::Report r;
+
         if ((millis() - snap.imu.last_ms) > (PERIOD_SENSOR_MS * 4)) {
             ss.triggerEStop("SENSOR_STALE");
             goto estop;
         }
-
-        SafetyMonitor::Report r;
 
         r = monitor.checkFlex(snap);
         if (!r.ok) { ss.triggerEStop(r.reason); goto estop; }
@@ -62,7 +62,7 @@ void safety_task(void* pvParam) {
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(PERIOD_SAFETY_MS));
         continue;
 
-    estop:
+    estop :
         getMotorDriver().disableAll();
         Serial.println("[SAFETY] *** EMERGENCY STOP ***");
         last_wake = xTaskGetTickCount(); // reset timing after estop
