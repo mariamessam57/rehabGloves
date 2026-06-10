@@ -50,7 +50,7 @@ void sensor_task(void* pvParam) {
         ss.setCalibPhase(CalibPhase::DONE);
         ss.setCalibComplete(true);
         ss.setCalibInProgress(false);
-        xEventGroupSetBits(ss.events, EVT_CALIB_DONE);
+        ss.setEventBits(EVT_CALIB_DONE);
         Serial.println("[SENSOR] Calibration loaded from NVS.");
     } else {
         // Request calibration and wait for user confirmation first
@@ -60,6 +60,7 @@ void sensor_task(void* pvParam) {
         ss.setCalibComplete(false);
         ss.setCalibInProgress(false);
         Serial.println("[SENSOR] Waiting to start calibration.");
+        Serial.println("[SENSOR] Send 1 for AUTO or 2 for MANUAL calibration.");
     }
 
     TickType_t last_wake = xTaskGetTickCount();
@@ -69,6 +70,8 @@ void sensor_task(void* pvParam) {
             if (ss.getCalibPhase() != CalibPhase::IDLE) {
                 ss.setCalibInProgress(true);
                 ss.setMode(SystemMode::CALIBRATING);
+                bool manual = ss.isCalibManualMode();
+                Serial.printf("[SENSOR] Calibration starting (%s mode)\n", manual ? "MANUAL" : "AUTO");
 
                 FlexCalib new_calib[NUM_FINGERS];
                 bool ok = calib_sys.runCalibration(FLEX_PINS, new_calib, phase_cb);
@@ -82,7 +85,7 @@ void sensor_task(void* pvParam) {
                 ss.clearRecalibrationRequest();
                 ss.setCalibInProgress(false);
                 ss.setMode(SystemMode::SAFE_LOCK);
-                xEventGroupSetBits(ss.events, EVT_CALIB_DONE);
+                ss.setEventBits(EVT_CALIB_DONE);
                 Serial.println("[SENSOR] Calibration completed.");
             }
         }

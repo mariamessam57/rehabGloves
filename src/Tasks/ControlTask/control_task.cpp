@@ -325,8 +325,7 @@ void control_task(void* pvParam) {
     SharedState& ss = SharedState::get();
 
     // Wait for calibration before doing anything
-    xEventGroupWaitBits(ss.events, EVT_CALIB_DONE,
-                        pdFALSE, pdTRUE, portMAX_DELAY);
+    ss.waitEventBits(EVT_CALIB_DONE, false, true, portMAX_DELAY);
 
     getMotorDriver().begin();
 
@@ -347,8 +346,13 @@ void control_task(void* pvParam) {
         bool estop = false;
         CalibPhase calib_phase = CalibPhase::IDLE;
         bool calib_complete = false;
+        bool calib_manual = false;
 
-        ss.readSystemSnapshot(snap, mode, estop, warning, calib_phase, calib_complete);
+        if (!ss.readSystemSnapshot(snap, mode, estop, warning, calib_phase, calib_complete, calib_manual)) {
+            Serial.println("[CONTROL] SharedState snapshot unavailable");
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
 
         if (prev_mode == SystemMode::ASSISTIVE && mode != SystemMode::ASSISTIVE) {
             assist_st = AssistState{};

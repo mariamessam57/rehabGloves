@@ -15,16 +15,20 @@ bool CalibrationSystem::startPhase(
 
     if (phase == CalibPhase::OPEN_HAND)
     {
-        Serial.println("[CALIB] WAITING: OPEN HAND");
+        Serial.printf("[CALIB] OPEN_HAND stage: collecting samples for %u ms\n", CALIB_DURATION_MS);
         vTaskDelay(pdMS_TO_TICKS(1000)); // give user time
     }
     else
     {
-        Serial.println("[CALIB] WAITING: CLOSE HAND");
+        Serial.printf("[CALIB] CLOSE_HAND stage: collecting samples for %u ms\n", CALIB_DURATION_MS);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
     _collectSamples(flex_pins, bufs, sample_count, CALIB_DURATION_MS);
+
+    Serial.printf("[CALIB] %s samples collected: %d\n",
+        phase == CalibPhase::OPEN_HAND ? "OPEN_HAND" : "CLOSE_HAND",
+        sample_count);
 
     for (int f = 0; f < NUM_FINGERS; f++)
     {
@@ -62,17 +66,24 @@ bool CalibrationSystem::runCalibration(
     void (*phase_cb)(CalibPhase)
 )
 {
+    Serial.println("[CALIB] runCalibration: starting OPEN_HAND stage.");
     if (phase_cb) phase_cb(CalibPhase::OPEN_HAND);
     if (!startPhase(CalibPhase::OPEN_HAND, flex_pins, out_calib)) {
+        Serial.println("[CALIB] OPEN_HAND stage failed.");
         return false;
     }
+    Serial.println("[CALIB] OPEN_HAND stage complete.");
 
+    Serial.println("[CALIB] runCalibration: starting CLOSE_HAND stage.");
     if (phase_cb) phase_cb(CalibPhase::CLOSE_HAND);
     if (!startPhase(CalibPhase::CLOSE_HAND, flex_pins, out_calib)) {
+        Serial.println("[CALIB] CLOSE_HAND stage failed.");
         return false;
     }
+    Serial.println("[CALIB] CLOSE_HAND stage complete.");
 
     if (phase_cb) phase_cb(CalibPhase::DONE);
+    Serial.println("[CALIB] Calibration run complete.");
     return true;
 }
 

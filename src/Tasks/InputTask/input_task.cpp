@@ -30,6 +30,7 @@ void input_task(void* pvParam) {
     static bool        session_active = false;
     static bool        session_paused = false;
     static SystemMode  saved_mode     = SystemMode::SAFE_LOCK;
+    static bool        calib_prompted = false;
 
     for (;;) {
         SystemMode current_mode = ss.getMode();
@@ -43,6 +44,16 @@ void input_task(void* pvParam) {
             session_active = false;
         }
 
+        if (current_mode == SystemMode::CALIBRATING &&
+            ss.getCalibPhase() == CalibPhase::IDLE) {
+            if (!calib_prompted) {
+                Serial.println("[INPUT] Calibration prompt: MOVE? 1:Y 2:N");
+                calib_prompted = true;
+            }
+        } else {
+            calib_prompted = false;
+        }
+
         char key = keypad.getKey();
 
         if (key != NO_KEY) {
@@ -51,10 +62,14 @@ void input_task(void* pvParam) {
             if (current_mode == SystemMode::CALIBRATING) {
                 if (ss.getCalibPhase() == CalibPhase::IDLE) {
                     if (key == '1' || key == '2') {
+                        bool manual = (key == '2');
+                        ss.setCalibManualMode(manual);
                         ss.setCalibPhase(CalibPhase::OPEN_HAND);
                         ss.clearWarning();
-                        Serial.printf("[INPUT] Move prompt answered: %s\n",
-                            (key == '1') ? "CAN MOVE" : "CANNOT MOVE");
+                        Serial.printf("[INPUT] Calibration start: %s\n",
+                            manual ? "MANUAL" : "AUTO");
+                        Serial.println("[INPUT] Opening hand for 5 seconds...");
+                        calib_prompted = false;
                     }
                 } else if (key == '4') {
                     session_active = false;
@@ -91,6 +106,7 @@ void input_task(void* pvParam) {
                             ss.setMode(SystemMode::CALIBRATING);
                             ss.setCalibPhase(CalibPhase::IDLE);
                             ss.setCalibComplete(false);
+                            ss.setCalibManualMode(false);
                             session_active = false;
                             session_paused = false;
                             ss.clearWarning();

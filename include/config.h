@@ -57,7 +57,7 @@
 #define PERIOD_DISPLAY_MS   100
 
 // ─── CALIBRATION ────────────────────────────────────────────────
-#define CALIB_DURATION_MS   7000U
+#define CALIB_DURATION_MS   5000U
 #define CALIB_SAMPLES_MAX   400
 #define CALIB_SIGMA         2.0f
 #define CALIB_MIN_RANGE     80          // ADC counts minimum valid range

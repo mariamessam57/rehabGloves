@@ -5,12 +5,43 @@ void SharedState::init() {
     _mtx_mode    = xSemaphoreCreateMutex();
     _mtx_sensors = xSemaphoreCreateMutex();
     _mtx_motors  = xSemaphoreCreateMutex();
-    events       = xEventGroupCreate();
+    _events      = xEventGroupCreate();
 
     configASSERT(_mtx_mode);
     configASSERT(_mtx_sensors);
     configASSERT(_mtx_motors);
-    configASSERT(events);
+    configASSERT(_events);
+    _initialized = true;
+}
+
+bool SharedState::isInitialized() {
+    return _initialized;
+}
+
+EventBits_t SharedState::waitEventBits(EventBits_t bits, bool clearOnExit,
+                                       bool waitForAll, TickType_t timeout) {
+    if (!_events) {
+        Serial.println("[WARN] waitEventBits called before SharedState init");
+        return 0;
+    }
+    return xEventGroupWaitBits(_events, bits, clearOnExit ? pdTRUE : pdFALSE,
+                               waitForAll ? pdTRUE : pdFALSE, timeout);
+}
+
+void SharedState::setEventBits(EventBits_t bits) {
+    if (!_events) {
+        Serial.println("[WARN] setEventBits called before SharedState init");
+        return;
+    }
+    xEventGroupSetBits(_events, bits);
+}
+
+void SharedState::clearEventBits(EventBits_t bits) {
+    if (!_events) {
+        Serial.println("[WARN] clearEventBits called before SharedState init");
+        return;
+    }
+    xEventGroupClearBits(_events, bits);
 }
 
 // ── Mode ─────────────────────────────────────────────────────────
@@ -45,23 +76,35 @@ void SharedState::readSensors(SensorSnapshot& out) {
     }
 }
 
-void SharedState::readSystemSnapshot(SensorSnapshot& out, SystemMode& mode,
-                                     bool& estop, const char*& warning,
-                                     CalibPhase& calib_phase, bool& calib_complete)
+bool SharedState::readSystemSnapshot(SensorSnapshot& out, SystemMode& mode,
+                                        bool& estop, const char*& warning,
+                                        CalibPhase& calib_phase, bool& calib_complete,
+                                        bool& calib_manual)
 {
-    if (_take(_mtx_mode)) {
-        mode           = _mode;
-        estop          = _estop;
-        warning        = _warning;
-        calib_phase    = _calib_phase;
-        calib_complete = _calib_complete;
-
-        if (_take(_mtx_sensors)) {
-            out = _sensors;
-            xSemaphoreGive(_mtx_sensors);
-        }
-        xSemaphoreGive(_mtx_mode);
+    if (!_initialized) {
+        return false;
     }
+
+    if (!_take(_mtx_mode)) {
+        return false;
+    }
+
+    mode           = _mode;
+    estop          = _estop;
+    warning        = (_warning[0] != '\0') ? _warning : nullptr;
+    calib_phase    = _calib_phase;
+    calib_complete = _calib_complete;
+    calib_manual   = _calib_manual_mode;
+
+    if (!_take(_mtx_sensors)) {
+        xSemaphoreGive(_mtx_mode);
+        return false;
+    }
+
+    out = _sensors;
+    xSemaphoreGive(_mtx_sensors);
+    xSemaphoreGive(_mtx_mode);
+    return true;
 }
 
 // ── Motors ───────────────────────────────────────────────────────
@@ -86,7 +129,7 @@ void SharedState::triggerEStop(const char* reason) {
         _mode  = SystemMode::ESTOP;
         xSemaphoreGive(_mtx_mode);
     }
-    xEventGroupSetBits(events, EVT_ESTOP);
+    setEventBits(EVT_ESTOP);
     Serial.printf("[SAFETY] ESTOP: %s\n", reason ? reason : "unknown");
 }
 
@@ -95,31 +138,40 @@ void SharedState::clearEStop() {
         _estop             = false;
         _calib_complete    = false;
         _calib_in_progress = false;
+        _calib_manual_mode = false;
         _calib_phase       = CalibPhase::IDLE;
         _mode              = SystemMode::SAFE_LOCK;
-        _warning           = nullptr;
+        _warning[0]        = '\0';
         xSemaphoreGive(_mtx_mode);
     }
-    xEventGroupClearBits(events, EVT_ESTOP | EVT_CALIB_DONE);
+    clearEventBits(EVT_ESTOP | EVT_CALIB_DONE);
 }
 
 void SharedState::setWarning(const char* warning) {
     if (_take(_mtx_mode)) {
-        _warning = warning;
+        if (warning) {
+            strncpy(_warning, warning, sizeof(_warning) - 1);
+            _warning[sizeof(_warning) - 1] = '\0';
+        } else {
+            _warning[0] = '\0';
+        }
         xSemaphoreGive(_mtx_mode);
     }
 }
 
 void SharedState::clearWarning() {
     if (_take(_mtx_mode)) {
-        _warning = nullptr;
+        _warning[0] = '\0';
         xSemaphoreGive(_mtx_mode);
     }
 }
 
 const char* SharedState::getWarning() {
     const char* w = nullptr;
-    if (_take(_mtx_mode)) { w = _warning; xSemaphoreGive(_mtx_mode); }
+    if (_take(_mtx_mode)) {
+        w = (_warning[0] != '\0') ? _warning : nullptr;
+        xSemaphoreGive(_mtx_mode);
+    }
     return w;
 }
 
@@ -158,6 +210,16 @@ bool SharedState::isCalibInProgress() {
 
 void SharedState::setCalibInProgress(bool v) {
     if (_take(_mtx_mode)) { _calib_in_progress = v; xSemaphoreGive(_mtx_mode); }
+}
+
+bool SharedState::isCalibManualMode() {
+    bool v = false;
+    if (_take(_mtx_mode)) { v = _calib_manual_mode; xSemaphoreGive(_mtx_mode); }
+    return v;
+}
+
+void SharedState::setCalibManualMode(bool v) {
+    if (_take(_mtx_mode)) { _calib_manual_mode = v; xSemaphoreGive(_mtx_mode); }
 }
 
 void SharedState::requestRecalibration() {

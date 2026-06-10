@@ -54,10 +54,19 @@ void display_task(void* pvParam) {
     bool       estop = false;
     CalibPhase cp   = CalibPhase::IDLE;
     bool       calib_complete = false;
+    bool       calib_manual = false;
 
     for (;;) {
         const char* warning = nullptr;
-        ss.readSystemSnapshot(snap, mode, estop, warning, cp, calib_complete);
+        if (!ss.readSystemSnapshot(snap, mode, estop, warning, cp, calib_complete, calib_manual)) {
+            estop = false;
+            mode = SystemMode::SAFE_LOCK;
+            cp = CalibPhase::IDLE;
+            calib_complete = false;
+            calib_manual = false;
+            snap = {};
+            warning = nullptr;
+        }
 
         oled.clearDisplay();
 
@@ -92,8 +101,21 @@ void display_task(void* pvParam) {
             }
         } else {
             oled.setCursor(0, 48);
-            if (mode == SystemMode::CALIBRATING && cp == CalibPhase::IDLE) {
-                oled.print("MOVE? 1:Y 2:N");
+            if (mode == SystemMode::CALIBRATING) {
+                if (cp == CalibPhase::IDLE) {
+                    oled.print("MOVE? 1:Y 2:N");
+                } else if (cp == CalibPhase::OPEN_HAND) {
+                    oled.print("OPEN HAND 5s");
+                } else if (cp == CalibPhase::CLOSE_HAND) {
+                    if (calib_manual) {
+                        oled.print("MANUAL CLOSE");
+                    } else {
+                        oled.print("CLOSE HAND 5s");
+                    }
+                } else {
+                    oled.print("CAL: ");
+                    oled.print(calibStr(cp));
+                }
             } else {
                 oled.print("CAL: ");
                 oled.print(calibStr(cp));
