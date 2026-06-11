@@ -12,6 +12,7 @@ void SharedState::init() {
     configASSERT(_mtx_motors);
     configASSERT(_events);
     _initialized = true;
+    _countdown_sec = 0; // تهيئة العداد بالقيمة صفر عند بدء التشغيل
 }
 
 bool SharedState::isInitialized() {
@@ -19,7 +20,7 @@ bool SharedState::isInitialized() {
 }
 
 EventBits_t SharedState::waitEventBits(EventBits_t bits, bool clearOnExit,
-                                       bool waitForAll, TickType_t timeout) {
+                                      bool waitForAll, TickType_t timeout) {
     if (!_events) {
         Serial.println("[WARN] waitEventBits called before SharedState init");
         return 0;
@@ -76,10 +77,11 @@ void SharedState::readSensors(SensorSnapshot& out) {
     }
 }
 
+// تعديل الدالة لتقرأ قيمة التايمر الحالي وتمرره للشاشة بالتزامن مع باقي النظام
 bool SharedState::readSystemSnapshot(SensorSnapshot& out, SystemMode& mode,
-                                        bool& estop, const char*& warning,
-                                        CalibPhase& calib_phase, bool& calib_complete,
-                                        bool& calib_manual)
+                                     bool& estop, const char*& warning,
+                                     CalibPhase& calib_phase, bool& calib_complete,
+                                     bool& calib_manual, int& countdown_sec)
 {
     if (!_initialized) {
         return false;
@@ -95,6 +97,9 @@ bool SharedState::readSystemSnapshot(SensorSnapshot& out, SystemMode& mode,
     calib_phase    = _calib_phase;
     calib_complete = _calib_complete;
     calib_manual   = _calib_manual_mode;
+    
+    // سحب قيمة التايمر الحالية تحت حماية الـ Mutex
+    countdown_sec  = _countdown_sec; 
 
     if (!_take(_mtx_sensors)) {
         xSemaphoreGive(_mtx_mode);
@@ -122,7 +127,7 @@ void SharedState::readMotors(MotorState out[NUM_FINGERS]) {
     }
 }
 
-// ── E-Stop ───────────────────────────────────────────────────────
+// ── Emergency stop ───────────────────────────────────────────────
 void SharedState::triggerEStop(const char* reason) {
     if (_take(_mtx_mode)) {
         _estop = true;
@@ -142,6 +147,7 @@ void SharedState::clearEStop() {
         _calib_phase       = CalibPhase::IDLE;
         _mode              = SystemMode::SAFE_LOCK;
         _warning[0]        = '\0';
+        _countdown_sec     = 0; // تصفير التايمر عند فك الطوارئ
         xSemaphoreGive(_mtx_mode);
     }
     clearEventBits(EVT_ESTOP | EVT_CALIB_DONE);
@@ -227,6 +233,7 @@ void SharedState::requestRecalibration() {
         _request_recalib     = true;
         _calib_complete      = false;
         _calib_in_progress   = false;
+        _countdown_sec       = 0;
         xSemaphoreGive(_mtx_mode);
     }
 }
@@ -242,4 +249,21 @@ void SharedState::clearRecalibrationRequest() {
         _request_recalib = false;
         xSemaphoreGive(_mtx_mode);
     }
+}
+
+// ── دوال التحكم والوصول الآمن للتايمر (Thread-Safe Setters/Getters) ──
+void SharedState::setCountdown(int sec) {
+    if (_take(_mtx_mode)) {
+        _countdown_sec = sec;
+        xSemaphoreGive(_mtx_mode);
+    }
+}
+
+int SharedState::getCountdown() {
+    int val = 0;
+    if (_take(_mtx_mode)) {
+        val = _countdown_sec;
+        xSemaphoreGive(_mtx_mode);
+    }
+    return val;
 }

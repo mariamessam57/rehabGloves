@@ -42,11 +42,12 @@ private:
         const uint8_t flex_pins[NUM_FINGERS],
         FlexCalib out_calib[NUM_FINGERS]
     );
-
-    void _collectSamples(
-        const uint8_t pins[NUM_FINGERS],
-        float bufs[NUM_FINGERS][CALIB_SAMPLES_MAX],
-        int& sample_count,
-        uint32_t duration_ms
-    );
+// جوه الجزء الـ private في ملف Calibration.h
+void _collectSamples(
+    const uint8_t pins[NUM_FINGERS],
+    float bufs[NUM_FINGERS][CALIB_SAMPLES_MAX],
+    int& sample_count,
+    uint32_t duration_ms,
+    CalibPhase phase // 👈 تأكدي من إضافة المتغير الخامس ده هنا
+);
 };

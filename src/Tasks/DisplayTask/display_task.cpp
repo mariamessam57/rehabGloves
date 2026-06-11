@@ -38,7 +38,6 @@ static const char* calibStr(CalibPhase p) {
 void display_task(void* pvParam) {
     SharedState& ss = SharedState::get();
 
-
     if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
         Serial.println("[DISPLAY] SSD1306 not found!");
         vTaskDelete(nullptr);
@@ -55,10 +54,13 @@ void display_task(void* pvParam) {
     CalibPhase cp   = CalibPhase::IDLE;
     bool       calib_complete = false;
     bool       calib_manual = false;
+    int        timer_val = 0; // متغير محلي لاستقبال قيمة العداد التنازلي الحية
 
     for (;;) {
         const char* warning = nullptr;
-        if (!ss.readSystemSnapshot(snap, mode, estop, warning, cp, calib_complete, calib_manual)) {
+        
+        // جلب الـ Snapshot متضمناً البارامتر الجديد الـ timer_val تحت حماية الـ Mutex المشترك
+        if (!ss.readSystemSnapshot(snap, mode, estop, warning, cp, calib_complete, calib_manual, timer_val)) {
             estop = false;
             mode = SystemMode::SAFE_LOCK;
             cp = CalibPhase::IDLE;
@@ -66,62 +68,84 @@ void display_task(void* pvParam) {
             calib_manual = false;
             snap = {};
             warning = nullptr;
+            timer_val = 0;
         }
 
         oled.clearDisplay();
-
-        // ── Row 0: Mode ────────────────────────────────────────
         oled.setTextSize(1);
+
+        // ── Row 0: Mode (y = 0) ────────────────────────────────────────
         oled.setCursor(0, 0);
         oled.print("MODE: ");
         oled.print(modeStr(mode));
 
-        // ── Row 1: System state ────────────────────────────────
-        oled.setCursor(0, 12);
+        // ── Row 1: System state (y = 10) ────────────────────────────────
+        oled.setCursor(0, 10);
         oled.print("STATE: ");
         oled.print(estop ? "ESTOP" : (calib_complete ? "ACTIVE" : "CALIB"));
 
-        // ── Row 2: Flex values ─────────────────────────────────
-        oled.setCursor(0, 24);
-        oled.printf("F0:%3d%% F1:%3d%% F2:%3d%%",
-            (int)(snap.flex[0].normalized * 100.0f),
-            (int)(snap.flex[1].normalized * 100.0f),
-            (int)(snap.flex[2].normalized * 100.0f));
+        // ── عرض ديناميكي بناءً على حالة المعايرة ────────────────────────
+        if (calib_complete && cp == CalibPhase::DONE) {
+            // المعايرة مكتملة والنظام نشط -> اعرض القراءات الحية للمستشعرات
+            
+            // ── Row 2: Flex values (y = 22)
+            oled.setCursor(0, 22);
+            oled.printf("F0:%3d%% F1:%3d%% F2:%3d%%",
+                (int)(snap.flex[0].normalized * 100.0f),
+                (int)(snap.flex[1].normalized * 100.0f),
+                (int)(snap.flex[2].normalized * 100.0f));
 
-        // ── Row 3: IMU gyro magnitude ──────────────────────────
-        oled.setCursor(0, 36);
-        oled.printf("GYRO: %.1f dps", snap.imu.gyro_mag);
-
-        if (mode == SystemMode::SAFE_LOCK) {
-            oled.setCursor(0, 48);
-            if (calib_complete && cp == CalibPhase::DONE) {
-                oled.print("CAL: DONE 1:P 2:A 3:R 4:E");
+            // ── Row 3: Dynamic Sensor Feedback (y = 34)
+            oled.setCursor(0, 34);
+            if (mode == SystemMode::RESISTANCE) {
+                oled.printf("FSR: %3d%%", (int)(snap.fsr.normalized * 100.0f));
             } else {
-                oled.print("1:P 2:A 3:R 4:E");
+                oled.printf("GYRO: %.1f dps", snap.imu.gyro_mag);
             }
-        } else {
-            oled.setCursor(0, 48);
-            if (mode == SystemMode::CALIBRATING) {
-                if (cp == CalibPhase::IDLE) {
-                    oled.print("MOVE? 1:Y 2:N");
-                } else if (cp == CalibPhase::OPEN_HAND) {
-                    oled.print("OPEN HAND 5s");
-                } else if (cp == CalibPhase::CLOSE_HAND) {
-                    if (calib_manual) {
-                        oled.print("MANUAL CLOSE");
-                    } else {
-                        oled.print("CLOSE HAND 5s");
-                    }
-                } else {
-                    oled.print("CAL: ");
-                    oled.print(calibStr(cp));
-                }
+
+            // ── Row 4: Navigation / Menu (y = 46)
+            oled.setCursor(0, 46);
+            if (mode == SystemMode::SAFE_LOCK) {
+                oled.print("1:M1 2:M2 3:M3 4:CAL");
             } else {
                 oled.print("CAL: ");
                 oled.print(calibStr(cp));
             }
+        } 
+        else {
+            // النظام لم يُعاير بعد أو يمر بمراحل المعايرة -> اعرض أسطر الأسئلة والإرشادات فقط
+            
+            // ── Row 3: Navigation / Prompts (y = 28) 
+            oled.setCursor(0, 28);
+            if (mode == SystemMode::SAFE_LOCK) {
+                // إرشاد البداية
+                oled.print("PRESS 4 TO CALIBRATE");
+            } 
+            else if (mode == SystemMode::CALIBRATING) {
+                // تفرعات أسئلة المعايرة والتايمر التنازلي المباشر
+                if (cp == CalibPhase::IDLE) {
+                    oled.print("MOVE? 1:Y 2:N");
+                } 
+                else if (cp == CalibPhase::OPEN_HAND) {
+                    // عرض تحديث الثواني لايف أثناء فرد اليد
+                    oled.printf("OPEN HAND... [%d s]", timer_val);
+                } 
+                else if (cp == CalibPhase::CLOSE_HAND) {
+                    if (calib_manual) {
+                        oled.print(">> MANUAL CLOSE <<");
+                    } else {
+                        // عرض تحديث الثواني لايف أثناء غلق اليد
+                        oled.printf("CLOSE HAND... [%d s]", timer_val);
+                    }
+                } 
+                else {
+                    oled.print("CALIBRATING: ");
+                    oled.print(calibStr(cp));
+                }
+            }
         }
 
+        // ── Row 5: Safety Manager System Warnings (y = 56) ─────────────
         if (warning) {
             oled.setCursor(0, 56);
             oled.print("WARN: ");

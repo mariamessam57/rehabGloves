@@ -1,4 +1,5 @@
 #include "Calibration.h"
+#include "systemstate/System_State.h" // تضمين ملف الحالة المشتركة لتحديث التايمر
 #include <Arduino.h>
 
 CalibrationSystem::CalibrationSystem() {
@@ -13,18 +14,8 @@ bool CalibrationSystem::startPhase(
     static float bufs[NUM_FINGERS][CALIB_SAMPLES_MAX];
     int sample_count = 0;
 
-    if (phase == CalibPhase::OPEN_HAND)
-    {
-        Serial.printf("[CALIB] OPEN_HAND stage: collecting samples for %u ms\n", CALIB_DURATION_MS);
-        vTaskDelay(pdMS_TO_TICKS(1000)); // give user time
-    }
-    else
-    {
-        Serial.printf("[CALIB] CLOSE_HAND stage: collecting samples for %u ms\n", CALIB_DURATION_MS);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-
-    _collectSamples(flex_pins, bufs, sample_count, CALIB_DURATION_MS);
+    // الدخول الفوري والمباشر لدالة التجميع لمنع أي تعليق خارجي
+    _collectSamples(flex_pins, bufs, sample_count, CALIB_DURATION_MS, phase);
 
     Serial.printf("[CALIB] %s samples collected: %d\n",
         phase == CalibPhase::OPEN_HAND ? "OPEN_HAND" : "CLOSE_HAND",
@@ -40,13 +31,14 @@ bool CalibrationSystem::startPhase(
             out_calib[f].max_raw = value;
     }
 
-    // validation only after CLOSE
+    // التحقق من صحة المدى الحركي (الفارق بين الفتح والغلق) بعد انتهاء مرحلة الغلق
     if (phase == CalibPhase::CLOSE_HAND)
     {
         for (int f = 0; f < NUM_FINGERS; f++)
         {
             float range = out_calib[f].max_raw - out_calib[f].min_raw;
 
+            // إذا كان الفارق أقل من الحد المسموح تعتبر المعايرة خاطئة
             if (range < CALIB_MIN_RANGE)
             {
                 Serial.printf("[CALIB] FAIL F%d range=%.1f\n", f, range);
@@ -68,16 +60,25 @@ bool CalibrationSystem::runCalibration(
 {
     Serial.println("[CALIB] runCalibration: starting OPEN_HAND stage.");
     if (phase_cb) phase_cb(CalibPhase::OPEN_HAND);
+    
+    vTaskDelay(pdMS_TO_TICKS(50)); 
+
     if (!startPhase(CalibPhase::OPEN_HAND, flex_pins, out_calib)) {
         Serial.println("[CALIB] OPEN_HAND stage failed.");
+        if (phase_cb) phase_cb(CalibPhase::FAILED);
         return false;
     }
     Serial.println("[CALIB] OPEN_HAND stage complete.");
 
-    Serial.println("[CALIB] runCalibration: starting CLOSE_HAND stage.");
+    // ── الانتقال لمرحلة غلق اليد ──
+    Serial.println("[CALIB] runCalibration: switching to CLOSE_HAND stage.");
     if (phase_cb) phase_cb(CalibPhase::CLOSE_HAND);
+    
+    vTaskDelay(pdMS_TO_TICKS(50)); 
+
     if (!startPhase(CalibPhase::CLOSE_HAND, flex_pins, out_calib)) {
         Serial.println("[CALIB] CLOSE_HAND stage failed.");
+        if (phase_cb) phase_cb(CalibPhase::FAILED);
         return false;
     }
     Serial.println("[CALIB] CLOSE_HAND stage complete.");
@@ -91,20 +92,74 @@ void CalibrationSystem::_collectSamples(
     const uint8_t pins[NUM_FINGERS],
     float bufs[NUM_FINGERS][CALIB_SAMPLES_MAX],
     int& sample_count,
-    uint32_t duration_ms)
+    uint32_t duration_ms,
+    CalibPhase phase)
 {
+    SharedState& ss = SharedState::get();
     sample_count = 0;
-    uint32_t start = millis();
 
-    while ((millis() - start) < duration_ms) {
-        if (sample_count < CALIB_SAMPLES_MAX) {
-            for (int f = 0; f < NUM_FINGERS; f++) {
-                bufs[f][sample_count] = (float)analogRead(pins[f]);
+    uint32_t period_sensor_ms = PERIOD_SENSOR_MS;
+    if (period_sensor_ms == 0) period_sensor_ms = 20;
+    const uint32_t loops_per_second = 1000 / period_sensor_ms;
+    uint32_t loop_counter = 0;
+
+    // 1️⃣ مرحلة الاستعداد الآمنة (2 ثانية) مدمجة داخل الـ Counter لمنع تعليق النواة
+    int prepare_seconds = 2;
+    Serial.printf("[CALIB] Phase: %s -> Prepare Stage Started.\n", 
+                  phase == CalibPhase::OPEN_HAND ? "OPEN_HAND" : "CLOSE_HAND");
+    
+    ss.setCountdown(prepare_seconds);
+    Serial.printf("[CALIB] Prepare Counter: %d s...\n", prepare_seconds);
+
+    while (prepare_seconds > 0) {
+        loop_counter++;
+        if (loop_counter >= loops_per_second) {
+            prepare_seconds--;
+            loop_counter = 0;
+            if (prepare_seconds > 0) {
+                ss.setCountdown(prepare_seconds);
+                Serial.printf("[CALIB] Prepare Counter: %d s...\n", prepare_seconds);
             }
-            sample_count++;
         }
-        vTaskDelay(pdMS_TO_TICKS(PERIOD_SENSOR_MS));
+        vTaskDelay(pdMS_TO_TICKS(period_sensor_ms));
     }
+
+    // 2️⃣ مرحلة التسجيل الفعلي وجمع العينات (5 ثواني)
+    int remaining_seconds = duration_ms / 1000;
+    loop_counter = 0;
+
+    Serial.println("[CALIB] Recording started...");
+    ss.setCountdown(remaining_seconds);
+    Serial.printf("[CALIB] Remaining: %d s...\n", remaining_seconds);
+
+    while (remaining_seconds > 0) {
+
+        // حماية الـ Buffer
+        if (sample_count >= CALIB_SAMPLES_MAX) {
+            Serial.println("[CALIB] Buffer full! Breaking early.");
+            break; 
+        }
+
+        // قراءة الـ ADC للمستشعرات
+        for (int f = 0; f < NUM_FINGERS; f++) {
+            bufs[f][sample_count] = (float)analogRead(pins[f]);
+        }
+        sample_count++;
+        loop_counter++;
+
+        // معالجة تغير الثواني بدقة عينات ثابتة
+        if (loop_counter >= loops_per_second) {
+            remaining_seconds--;
+            loop_counter = 0;
+            
+            ss.setCountdown(remaining_seconds);
+            Serial.printf("[CALIB] Remaining: %d s...\n", remaining_seconds);
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(period_sensor_ms));
+    }
+    
+    ss.setCountdown(0);
 }
 
 bool CalibrationSystem::save(const FlexCalib calib[NUM_FINGERS]) {

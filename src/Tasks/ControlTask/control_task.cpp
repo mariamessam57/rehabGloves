@@ -347,8 +347,10 @@ void control_task(void* pvParam) {
         CalibPhase calib_phase = CalibPhase::IDLE;
         bool calib_complete = false;
         bool calib_manual = false;
+        int dummy_timer = 0; // البارامتر الثامن الجديد المضاف لمنع خطأ الـ Compilation
 
-        if (!ss.readSystemSnapshot(snap, mode, estop, warning, calib_phase, calib_complete, calib_manual)) {
+        // استدعاء الدالة المحدثة بـ 8 بارامترات كاملة ومتزامنة
+        if (!ss.readSystemSnapshot(snap, mode, estop, warning, calib_phase, calib_complete, calib_manual, dummy_timer)) {
             Serial.println("[CONTROL] SharedState snapshot unavailable");
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;

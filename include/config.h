@@ -20,13 +20,12 @@
 #define PIN_SDA             21
 #define PIN_SCL             22
 
-// ─── KEYPAD (1×4 via 2 rows × 2 cols) ──────────────────────────
-#define KEYPAD_ROWS         2
-#define KEYPAD_COLS         2
-#define PIN_ROW0            13
-#define PIN_ROW1            14
-#define PIN_COL0            4
-#define PIN_COL1            5
+// ─── BUTTONS (4 independent GPIO inputs with internal PULLUP) ──────────
+#define PIN_BUTTON_1        13      // Key1 → LOW when pressed
+#define PIN_BUTTON_2        14      // Key2 → LOW when pressed
+#define PIN_BUTTON_3        4       // Key3 → LOW when pressed
+#define PIN_BUTTON_4        5       // Key4 → LOW when pressed
+#define BUTTON_DEBOUNCE_MS  50      // Debounce time in milliseconds
 
 // ─── PWM (LEDC) ─────────────────────────────────────────────────
 #define PWM_FREQ_HZ         20000U
