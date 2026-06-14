@@ -1,117 +1,139 @@
-#ifndef SYSTEM_STATE_H
-#define SYSTEM_STATE_H
+#pragma once
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/event_groups.h"
 #include "SystemTypes.h"
-#include "Config.h"
-#include <Arduino.h>
+#include "config.h"
+#include <string.h>
 
-#define EVT_ESTOP       (1 << 0)
-#define EVT_CALIB_DONE  (1 << 1)
+// ── Event-group bit definitions ──────────────────────────────────
+#define EVT_CALIB_DONE   (1 << 0)
+#define EVT_ESTOP        (1 << 1)
 
+// ================================================================
+//  SharedState  — singleton, all inter-task communication
+// ================================================================
 class SharedState {
 public:
-    static SharedState& get() {
-        static SharedState instance;
-        return instance;
-    }
+    static SharedState& get();
 
-    // ── init (call once from setup()) ────────────────────────────
     void init();
+    bool isInitialized();
 
-    // ── Mode ─────────────────────────────────────────────────────
-    SystemMode getMode();
-    void       setMode(SystemMode m);
+    // ── Mode ──────────────────────────────────────────────────────
+    SystemMode  getMode();
+    void        setMode(SystemMode m);
 
-    // ── Sensor snapshot (written by SensorTask) ──────────────────
+    // ── Sensors ───────────────────────────────────────────────────
     void writeSensors(const SensorSnapshot& snap);
     void readSensors(SensorSnapshot& out);
-    
-    // تم تعديل الدالة لإضافة متغير countdown_sec لتمرير قيمة التايمر للشاشة بالتزامن
-    bool readSystemSnapshot(SensorSnapshot& out, SystemMode& mode,
-                            bool& estop, const char*& warning,
-                            CalibPhase& calib_phase, bool& calib_complete,
-                            bool& calib_manual, int& countdown_sec);
 
-    // ── Motor commands (written by ControlTask) ───────────────────
-    void  writeMotors(const MotorState motors[NUM_FINGERS]);
-    void  readMotors(MotorState out[NUM_FINGERS]);
+    // ── Motors ────────────────────────────────────────────────────
+    void writeMotors(MotorState motors[NUM_FINGERS]);
+    void readMotors(MotorState motors[NUM_FINGERS]);
 
-    // ── Emergency stop ───────────────────────────────────────────
-    void  triggerEStop(const char* reason);
-    void  clearEStop();
-    bool  isEStop();
+    // ── ESTOP ─────────────────────────────────────────────────────
+    void triggerEStop(const char* reason);
+    void clearEStop();
+    bool isEStop();
 
-    // ── Safety warnings ──────────────────────────────────────────
-    void  setWarning(const char* warning);
-    void  clearWarning();
+    // ── Warning ───────────────────────────────────────────────────
+    void        setWarning(const char* w);
+    void        clearWarning();
     const char* getWarning();
 
-    // ── Calibration ──────────────────────────────────────────────
-    bool  isCalibComplete();
-    void  setCalibComplete(bool v);
-    void  setCalibPhase(CalibPhase p);
-    CalibPhase getCalibPhase();
+    // ── Auto calibration ──────────────────────────────────────────
+    bool        isCalibComplete();
+    void        setCalibComplete(bool v);
+    CalibPhase  getCalibPhase();
+    void        setCalibPhase(CalibPhase p);
+    bool        isCalibInProgress();
+    void        setCalibInProgress(bool v);
+    bool        isCalibManualMode();
+    void        setCalibManualMode(bool v);
+    void        requestRecalibration();
+    bool        shouldRecalibrate();
+    void        clearRecalibrationRequest();
 
-    bool  isCalibInProgress();
-    void  setCalibInProgress(bool v);
-    bool  isCalibManualMode();
-    void  setCalibManualMode(bool v);
-
-    void  requestRecalibration();
-    bool  shouldRecalibrate();
-    void  clearRecalibrationRequest();
-
-    // ── دوال التايمر الجديدة للعد التنازلي (Thread-Safe) ──────────────────
+    // ── Countdown timer (auto calib display) ─────────────────────
     void setCountdown(int sec);
     int  getCountdown();
 
-    // ── Event group helpers (safe access) ─────────────────────────────
+    // ── Manual calibration step machine ──────────────────────────
+    ManualCalibStep getManualCalibStep();
+    void            setManualCalibStep(ManualCalibStep s);
+
+    // Signal from input_task → sensor_task / control_task
+    bool getManualCalibConfirmed();   // user pressed 1:Yes
+    void setManualCalibConfirmed(bool v);
+    bool getManualCalibMore();        // user pressed 2:More
+    void setManualCalibMore(bool v);
+
+    // Countdown for manual calib warning screen (3 2 1)
+    void setManualCountdown(int sec);
+    int  getManualCountdown();
+
+    // Timestamp set when calib finishes (for 2-second auto-return)
+    void     setCalibDoneTs(uint32_t ts);
+    uint32_t getCalibDoneTs();
+
+    // ── Atomic snapshot for display_task ─────────────────────────
+    bool readSystemSnapshot(
+        SensorSnapshot& out,
+        SystemMode&     mode,
+        bool&           estop,
+        const char*&    warning,
+        CalibPhase&     calib_phase,
+        bool&           calib_complete,
+        bool&           calib_manual,
+        int&            countdown_sec,
+        ManualCalibStep& manual_step,
+        int&            manual_countdown,
+        uint32_t&       calib_done_ts
+    );
+
+    // ── Event group ───────────────────────────────────────────────
     EventBits_t waitEventBits(EventBits_t bits, bool clearOnExit,
                               bool waitForAll, TickType_t timeout);
-    void setEventBits(EventBits_t bits);
-    void clearEventBits(EventBits_t bits);
-
-    // ── Initialization sentinel ────────────────────────────────────────
-    bool isInitialized();
+    void        setEventBits(EventBits_t bits);
+    void        clearEventBits(EventBits_t bits);
 
 private:
     SharedState() = default;
-    SharedState(const SharedState&) = delete;
 
+    bool _take(SemaphoreHandle_t m);
+
+    // ── Kernel objects ────────────────────────────────────────────
     SemaphoreHandle_t _mtx_mode    = nullptr;
     SemaphoreHandle_t _mtx_sensors = nullptr;
     SemaphoreHandle_t _mtx_motors  = nullptr;
     EventGroupHandle_t _events     = nullptr;
-    bool               _initialized = false;
+    bool _initialized              = false;
 
-    SystemMode     _mode           = SystemMode::SAFE_LOCK;
-    SensorSnapshot _sensors       = {};
-    MotorState     _motors[NUM_FINGERS] = {};
-    bool           _estop          = false;
-    bool           _calib_complete  = false;
-    CalibPhase     _calib_phase     = CalibPhase::IDLE;
-    bool           _calib_in_progress = false;
-    bool           _calib_manual_mode = false;
-    bool           _request_recalib = false;
-    char           _warning[64]    = {};
-    
-    // المتغير الخاص بالتايمر
-    int            _countdown_sec   = 0; 
+    // ── Mode-domain fields (guarded by _mtx_mode) ─────────────────
+    SystemMode  _mode              = SystemMode::SAFE_LOCK;
+    bool        _estop             = false;
+    char        _warning[32]       = {};
 
-    inline bool _take(SemaphoreHandle_t m) {
-        if (!m) {
-            Serial.println("[WARN] SharedState mutex not initialized");
-            return false;
-        }
-        bool ok = xSemaphoreTake(m, pdMS_TO_TICKS(10)) == pdTRUE;
-        if (!ok) {
-            Serial.println("[WARN] SharedState mutex timeout");
-        }
-        return ok;
-    }
+    // Auto calibration
+    CalibPhase  _calib_phase       = CalibPhase::IDLE;
+    bool        _calib_complete    = false;
+    bool        _calib_in_progress = false;
+    bool        _calib_manual_mode = false;
+    bool        _request_recalib   = false;
+    int         _countdown_sec     = 0;
+
+    // Manual calibration step machine
+    ManualCalibStep _manual_calib_step      = ManualCalibStep::IDLE;
+    bool            _manual_calib_confirmed = false;
+    bool            _manual_calib_more      = false;
+    int             _manual_countdown       = 0;
+    uint32_t        _calib_done_ts          = 0;
+
+    // ── Sensor domain (guarded by _mtx_sensors) ───────────────────
+    SensorSnapshot _sensors = {};
+
+    // ── Motor domain (guarded by _mtx_motors) ─────────────────────
+    MotorState _motors[NUM_FINGERS] = {};
 };
-
-#endif
