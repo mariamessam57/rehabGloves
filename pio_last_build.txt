@@ -1,0 +1,89 @@
+﻿Processing esp32dev (platform: espressif32; board: esp32dev; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html
+PLATFORM: Espressif 32 (6.5.0) > Espressif ESP32 Dev Module
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20014.231204 (2.0.14) 
+ - tool-esptoolpy @ 1.40501.0 (4.5.1) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 52 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Adafruit SSD1306 @ 2.5.16
+|-- Adafruit GFX Library @ 1.12.6
+|-- Keypad @ 3.1.1
+|-- I2Cdevlib-MPU6050 @ 1.0.0
+|-- Adafruit Unified Sensor @ 1.1.15
+|-- BlynkNcpDriver @ 0.7.0
+|-- MotorDrive
+|-- Wire @ 2.0.0
+|-- Safety
+|-- Calibration
+|-- Sensors
+Building in release mode
+Compiling .pio\build\esp32dev\src\Tasks\ControlTask\control_task.cpp.o
+Compiling .pio\build\esp32dev\src\Tasks\DisplayTask\display_task.cpp.o
+Compiling .pio\build\esp32dev\src\Tasks\InputTask\input_task.cpp.o
+Archiving .pio\build\esp32dev\lib510\libWire.a
+Indexing .pio\build\esp32dev\lib510\libWire.a
+platformio.exe : src/Tasks/ControlTask/control_task.cpp:35:10: fatal error: 
+fsm_events.h: No such file or directory
+At line:1 char:1
++ & "C:\Users\dell\.platformio\penv\Scripts\platformio.exe" run -e esp3 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (src/Tasks/Contr...le or directory 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+********************************************************************
+* Looking for fsm_events.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:fsm_events.h"
+* Web  > https://registry.platformio.org/search?q=header:fsm_events.h
+*
+********************************************************************
+
+ #include "fsm_events.h"
+          ^~~~~~~~~~~~~~
+compilation terminated.
+src/Tasks/DisplayTask/display_task.cpp:52:10: fatal error: fsm_events.h: No 
+such file or directory
+
+********************************************************************
+* Looking for fsm_events.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:fsm_events.h"
+* Web  > https://registry.platformio.org/search?q=header:fsm_events.h
+*
+********************************************************************
+
+ #include "fsm_events.h"
+          ^~~~~~~~~~~~~~
+compilation terminated.
+src/Tasks/InputTask/input_task.cpp:48:10: fatal error: fsm_events.h: No such 
+file or directory
+
+********************************************************************
+* Looking for fsm_events.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:fsm_events.h"
+* Web  > https://registry.platformio.org/search?q=header:fsm_events.h
+*
+********************************************************************
+
+ #include "fsm_events.h"
+          ^~~~~~~~~~~~~~
+compilation terminated.
+Archiving .pio\build\esp32dev\lib39d\libSPI.a
+*** [.pio\build\esp32dev\src\Tasks\ControlTask\control_task.cpp.o] Error 1
+*** [.pio\build\esp32dev\src\Tasks\DisplayTask\display_task.cpp.o] Error 1
+*** [.pio\build\esp32dev\src\Tasks\InputTask\input_task.cpp.o] Error 1
+Indexing .pio\build\esp32dev\lib39d\libSPI.a
+========================== [FAILED] Took 6.90 seconds 
+==========================
