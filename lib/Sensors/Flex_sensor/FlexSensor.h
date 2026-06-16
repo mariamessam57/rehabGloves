@@ -2,7 +2,7 @@
 #define FLEX_SENSOR_H
 #include <Arduino.h>
 #include "../Filters/Filters.h"
-#include "SystemTypes.h"
+#include "../include/SystemTypes.h"
 
 class FlexSensor {
 public:

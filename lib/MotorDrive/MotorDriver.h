@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "SystemTypes.h"
+#include <SystemTypes.h>
 #include "Config.h"
 
 // ================================================================

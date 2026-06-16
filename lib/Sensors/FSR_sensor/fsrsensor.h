@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 #include "../../Filters/Filters.h"
-#include "SystemTypes.h"
+#include "../include/SystemTypes.h"
 
 class FSRSensor {
 public:

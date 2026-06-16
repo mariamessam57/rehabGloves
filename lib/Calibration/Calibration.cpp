@@ -1,200 +1,263 @@
+// ================================================================
+//  Calibration.cpp  — NON-BLOCKING FSM-COMPLIANT IMPLEMENTATION
+//
+//  Violation elimination summary:
+//
+//  [V-1]  FIXED: while(prepare_seconds) loop → REMOVED entirely.
+//                Timing is now control_task's WARN_OPEN countdown.
+//
+//  [V-2]  FIXED: while(remaining_seconds) loop → REMOVED entirely.
+//                Replaced by addSample() called from sensor_task
+//                on every 20ms tick. 250 calls × 20ms = 5s of
+//                samples; control_task's tick timer ends the phase.
+//
+//  [V-3]  FIXED: ss.setCountdown() → REMOVED. control_task writes
+//                countdown to SharedState from its own tick timer.
+//                CalibrationSystem has zero SharedState access.
+//
+//  [V-4]  FIXED: analogRead() → REMOVED. addSample() accepts raw[]
+//                passed from sensor_task's own flex getData().raw.
+//
+//  [V-5]  FIXED: loop_counter / loops_per_second hidden FSM →
+//                REMOVED. No internal timing state whatsoever.
+//
+//  [V-6]  FIXED: vTaskDelay() → REMOVED. Every function returns
+//                immediately. No blocking anywhere.
+//
+//  [V-7]  FIXED: startPhase() → REMOVED. Replaced by explicit
+//                computeOpenHand() / computeCloseHand() called by
+//                control_task at the moment it chooses.
+//
+//  [V-8]  FIXED: Range validation inside startPhase → moved to
+//                validate(), called by control_task explicitly.
+//                CalibrationSystem returns a code; control_task
+//                decides what to do with it.
+//
+//  [V-9]  FIXED: static float bufs[][] inside function → moved to
+//                instance variable _buf[][]. No stack allocation.
+//                No reentrance hazard.
+//
+//  [V-10] FIXED: runCalibration() sequence → REMOVED. control_task
+//                owns the OPEN→CLOSE transition.
+//
+//  [V-11] FIXED: phase_cb() calls → REMOVED. control_task calls
+//                setCalibPhase() directly at the right moment.
+//
+//  [V-12] FIXED: vTaskDelay(50) between phases → REMOVED.
+//
+//  [V-13] FIXED: bool return driving upstream FSM → replaced by
+//                CalibResultCode enum with explicit error cases.
+// ================================================================
+
 #include "Calibration.h"
-#include "systemstate/System_State.h" // تضمين ملف الحالة المشتركة لتحديث التايمر
 #include <Arduino.h>
+#include <string.h>
 
-CalibrationSystem::CalibrationSystem() {
-    // Constructor intentionally left empty; Preferences initializes on first use.
+// ================================================================
+//  resetBuffers — full reset at calibration start
+//  Called by: control_task (once, at CALIBRATING entry)
+// ================================================================
+void CalibrationSystem::resetBuffers() {
+    memset(_buf, 0, sizeof(_buf));
+    _sample_count   = 0;
+    _result         = CalibrationResult{};
+    Serial.println("[CALIB] Buffers reset.");
 }
 
-bool CalibrationSystem::startPhase(
-    CalibPhase phase,
-    const uint8_t flex_pins[NUM_FINGERS],
-    FlexCalib out_calib[NUM_FINGERS])
-{
-    static float bufs[NUM_FINGERS][CALIB_SAMPLES_MAX];
-    int sample_count = 0;
+// ================================================================
+//  resetSampleBuffer — partial reset between phases
+//  Called by: control_task (after computeOpenHand, before CLOSE phase)
+// ================================================================
+void CalibrationSystem::resetSampleBuffer() {
+    memset(_buf, 0, sizeof(_buf));
+    _sample_count = 0;
+    Serial.println("[CALIB] Sample buffer cleared for next phase.");
+}
 
-    // الدخول الفوري والمباشر لدالة التجميع لمنع أي تعليق خارجي
-    _collectSamples(flex_pins, bufs, sample_count, CALIB_DURATION_MS, phase);
-
-    Serial.printf("[CALIB] %s samples collected: %d\n",
-        phase == CalibPhase::OPEN_HAND ? "OPEN_HAND" : "CLOSE_HAND",
-        sample_count);
-
-    for (int f = 0; f < NUM_FINGERS; f++)
-    {
-        float value = SigmaFilter::compute(bufs[f], sample_count, CALIB_SIGMA);
-
-        if (phase == CalibPhase::OPEN_HAND)
-            out_calib[f].min_raw = value;
-        else
-            out_calib[f].max_raw = value;
+// ================================================================
+//  addSample — O(1), non-blocking sample ingestion
+//  Called by: sensor_task on every 20ms tick during a calib phase
+//
+//  raw[] contains NUM_FINGERS raw ADC values read by sensor_task's
+//  own flex sensor objects. No analogRead() here.
+//
+//  Returns true  → sample accepted.
+//  Returns false → buffer full; sensor_task should stop calling
+//                  (control_task's timer will fire anyway).
+// ================================================================
+bool CalibrationSystem::addSample(const float raw[NUM_FINGERS]) {
+    if (_sample_count >= CALIB_SAMPLES_MAX) {
+        // Buffer full — not an error; just silently cap.
+        return false;
     }
 
-    // التحقق من صحة المدى الحركي (الفارق بين الفتح والغلق) بعد انتهاء مرحلة الغلق
-    if (phase == CalibPhase::CLOSE_HAND)
-    {
-        for (int f = 0; f < NUM_FINGERS; f++)
-        {
-            float range = out_calib[f].max_raw - out_calib[f].min_raw;
-
-            // إذا كان الفارق أقل من الحد المسموح تعتبر المعايرة خاطئة
-            if (range < CALIB_MIN_RANGE)
-            {
-                Serial.printf("[CALIB] FAIL F%d range=%.1f\n", f, range);
-                return false;
-            }
-
-            out_calib[f].valid = true;
-        }
+    for (int f = 0; f < NUM_FINGERS; f++) {
+        _buf[f][_sample_count] = raw[f];
     }
-
+    _sample_count++;
     return true;
 }
 
-bool CalibrationSystem::runCalibration(
-    const uint8_t flex_pins[NUM_FINGERS],
-    FlexCalib out_calib[NUM_FINGERS],
-    void (*phase_cb)(CalibPhase)
-)
-{
-    Serial.println("[CALIB] runCalibration: starting OPEN_HAND stage.");
-    if (phase_cb) phase_cb(CalibPhase::OPEN_HAND);
-    
-    vTaskDelay(pdMS_TO_TICKS(50)); 
-
-    if (!startPhase(CalibPhase::OPEN_HAND, flex_pins, out_calib)) {
-        Serial.println("[CALIB] OPEN_HAND stage failed.");
-        if (phase_cb) phase_cb(CalibPhase::FAILED);
+// ================================================================
+//  computeOpenHand — pure math, O(n), non-blocking
+//  Called by: control_task when OPEN_HAND phase timer expires
+//
+//  Applies SigmaFilter to remove outliers, then records the
+//  filtered mean as the open-hand reference for each finger.
+//
+//  Returns false if no samples were collected (guard only;
+//  normal operation always produces samples).
+// ================================================================
+bool CalibrationSystem::computeOpenHand() {
+    if (_sample_count == 0) {
+        Serial.println("[CALIB] computeOpenHand: no samples.");
         return false;
     }
-    Serial.println("[CALIB] OPEN_HAND stage complete.");
 
-    // ── الانتقال لمرحلة غلق اليد ──
-    Serial.println("[CALIB] runCalibration: switching to CLOSE_HAND stage.");
-    if (phase_cb) phase_cb(CalibPhase::CLOSE_HAND);
-    
-    vTaskDelay(pdMS_TO_TICKS(50)); 
+    Serial.printf("[CALIB] computeOpenHand: %d samples\n", _sample_count);
 
-    if (!startPhase(CalibPhase::CLOSE_HAND, flex_pins, out_calib)) {
-        Serial.println("[CALIB] CLOSE_HAND stage failed.");
-        if (phase_cb) phase_cb(CalibPhase::FAILED);
-        return false;
+    for (int f = 0; f < NUM_FINGERS; f++) {
+        _result.open_raw[f] = SigmaFilter::compute(
+            _buf[f], _sample_count, CALIB_SIGMA);
+
+        Serial.printf("[CALIB]   F%d open_raw = %.1f\n",
+                      f, _result.open_raw[f]);
     }
-    Serial.println("[CALIB] CLOSE_HAND stage complete.");
 
-    if (phase_cb) phase_cb(CalibPhase::DONE);
-    Serial.println("[CALIB] Calibration run complete.");
+    _result.open_computed = true;
     return true;
 }
 
-void CalibrationSystem::_collectSamples(
-    const uint8_t pins[NUM_FINGERS],
-    float bufs[NUM_FINGERS][CALIB_SAMPLES_MAX],
-    int& sample_count,
-    uint32_t duration_ms,
-    CalibPhase phase)
-{
-    SharedState& ss = SharedState::get();
-    sample_count = 0;
-
-    uint32_t period_sensor_ms = PERIOD_SENSOR_MS;
-    if (period_sensor_ms == 0) period_sensor_ms = 20;
-    const uint32_t loops_per_second = 1000 / period_sensor_ms;
-    uint32_t loop_counter = 0;
-
-    // 1️⃣ مرحلة الاستعداد الآمنة (2 ثانية) مدمجة داخل الـ Counter لمنع تعليق النواة
-    int prepare_seconds = 2;
-    Serial.printf("[CALIB] Phase: %s -> Prepare Stage Started.\n", 
-                  phase == CalibPhase::OPEN_HAND ? "OPEN_HAND" : "CLOSE_HAND");
-    
-    ss.setCountdown(prepare_seconds);
-    Serial.printf("[CALIB] Prepare Counter: %d s...\n", prepare_seconds);
-
-    while (prepare_seconds > 0) {
-        loop_counter++;
-        if (loop_counter >= loops_per_second) {
-            prepare_seconds--;
-            loop_counter = 0;
-            if (prepare_seconds > 0) {
-                ss.setCountdown(prepare_seconds);
-                Serial.printf("[CALIB] Prepare Counter: %d s...\n", prepare_seconds);
-            }
-        }
-        vTaskDelay(pdMS_TO_TICKS(period_sensor_ms));
+// ================================================================
+//  computeCloseHand — pure math, O(n), non-blocking
+//  Called by: control_task when CLOSE_HAND phase timer expires
+//
+//  Same operation as computeOpenHand but stores close reference.
+// ================================================================
+bool CalibrationSystem::computeCloseHand() {
+    if (_sample_count == 0) {
+        Serial.println("[CALIB] computeCloseHand: no samples.");
+        return false;
     }
 
-    // 2️⃣ مرحلة التسجيل الفعلي وجمع العينات (5 ثواني)
-    int remaining_seconds = duration_ms / 1000;
-    loop_counter = 0;
+    Serial.printf("[CALIB] computeCloseHand: %d samples\n", _sample_count);
 
-    Serial.println("[CALIB] Recording started...");
-    ss.setCountdown(remaining_seconds);
-    Serial.printf("[CALIB] Remaining: %d s...\n", remaining_seconds);
+    for (int f = 0; f < NUM_FINGERS; f++) {
+        _result.close_raw[f] = SigmaFilter::compute(
+            _buf[f], _sample_count, CALIB_SIGMA);
 
-    while (remaining_seconds > 0) {
-
-        // حماية الـ Buffer
-        if (sample_count >= CALIB_SAMPLES_MAX) {
-            Serial.println("[CALIB] Buffer full! Breaking early.");
-            break; 
-        }
-
-        // قراءة الـ ADC للمستشعرات
-        for (int f = 0; f < NUM_FINGERS; f++) {
-            bufs[f][sample_count] = (float)analogRead(pins[f]);
-        }
-        sample_count++;
-        loop_counter++;
-
-        // معالجة تغير الثواني بدقة عينات ثابتة
-        if (loop_counter >= loops_per_second) {
-            remaining_seconds--;
-            loop_counter = 0;
-            
-            ss.setCountdown(remaining_seconds);
-            Serial.printf("[CALIB] Remaining: %d s...\n", remaining_seconds);
-        }
-        
-        vTaskDelay(pdMS_TO_TICKS(period_sensor_ms));
+        Serial.printf("[CALIB]   F%d close_raw = %.1f\n",
+                      f, _result.close_raw[f]);
     }
-    
-    ss.setCountdown(0);
+
+    _result.close_computed = true;
+    return true;
 }
 
-bool CalibrationSystem::save(const FlexCalib calib[NUM_FINGERS]) {
+// ================================================================
+//  validate — pure computation, O(n), non-blocking
+//  Called by: control_task after computeCloseHand()
+//
+//  Checks that both phases were computed and that the range
+//  (close - open) meets the minimum threshold per finger.
+//
+//  On success: populates _result.calib[] and sets success=true.
+//  Returns CALIB_OK on success, error code otherwise.
+//
+//  NOTE: control_task decides what to do with the error code.
+//        CalibrationSystem has no authority over FSM transitions.
+// ================================================================
+CalibResultCode CalibrationSystem::validate() {
+    if (!_result.open_computed || !_result.close_computed) {
+        Serial.println("[CALIB] validate: phases not complete.");
+        return CalibResultCode::CALIB_PHASES_MISSING;
+    }
+
+    for (int f = 0; f < NUM_FINGERS; f++) {
+        float range = _result.close_raw[f] - _result.open_raw[f];
+
+        Serial.printf("[CALIB]   F%d range = %.1f (min=%d)\n",
+                      f, range, CALIB_MIN_RANGE);
+
+        if (range < (float)CALIB_MIN_RANGE) {
+            Serial.printf("[CALIB] FAIL F%d range too small: %.1f\n",
+                          f, range);
+            _result.success = false;
+            return CalibResultCode::CALIB_RANGE_TOO_SMALL;
+        }
+
+        // Populate FlexCalib for this finger
+        _result.calib[f].min_raw = _result.open_raw[f];
+        _result.calib[f].max_raw = _result.close_raw[f];
+        _result.calib[f].valid   = true;
+    }
+
+    _result.success = true;
+    Serial.println("[CALIB] Validation passed.");
+    return CalibResultCode::CALIB_OK;
+}
+
+// ================================================================
+//  save — NVS write, blocking but brief (flash write)
+//  Called by: sensor_task after control_task confirms CALIB_OK
+//
+//  Accepts CalibrationResult directly so sensor_task never needs
+//  to query CalibrationSystem after the fact.
+// ================================================================
+bool CalibrationSystem::save(const CalibrationResult& result) {
+    if (!result.success) {
+        Serial.println("[CALIB] save: result not valid, skipping.");
+        return false;
+    }
+
     _prefs.begin(PREFS_NAMESPACE, false);
     for (int f = 0; f < NUM_FINGERS; f++) {
-        char k1[12], k2[12];
-        snprintf(k1, sizeof(k1), "f%d_min", f);
-        snprintf(k2, sizeof(k2), "f%d_max", f);
-        _prefs.putFloat(k1, calib[f].min_raw);
-        _prefs.putFloat(k2, calib[f].max_raw);
+        char k_min[12], k_max[12];
+        snprintf(k_min, sizeof(k_min), "f%d_min", f);
+        snprintf(k_max, sizeof(k_max), "f%d_max", f);
+        _prefs.putFloat(k_min, result.calib[f].min_raw);
+        _prefs.putFloat(k_max, result.calib[f].max_raw);
     }
     _prefs.putBool("valid", true);
     _prefs.end();
+
+    Serial.println("[CALIB] Saved to NVS.");
     return true;
 }
 
-bool CalibrationSystem::load(FlexCalib calib[NUM_FINGERS]) {
+// ================================================================
+//  load — NVS read, blocking but brief
+//  Called by: sensor_task on boot to check for saved calibration
+// ================================================================
+bool CalibrationSystem::load(FlexCalib out_calib[NUM_FINGERS]) {
     _prefs.begin(PREFS_NAMESPACE, true);
     bool valid = _prefs.getBool("valid", false);
+
     if (valid) {
         for (int f = 0; f < NUM_FINGERS; f++) {
-            char k1[12], k2[12];
-            snprintf(k1, sizeof(k1), "f%d_min", f);
-            snprintf(k2, sizeof(k2), "f%d_max", f);
-            calib[f].min_raw = _prefs.getFloat(k1, 0.0f);
-            calib[f].max_raw = _prefs.getFloat(k2, 4095.0f);
-            calib[f].valid   = true;
+            char k_min[12], k_max[12];
+            snprintf(k_min, sizeof(k_min), "f%d_min", f);
+            snprintf(k_max, sizeof(k_max), "f%d_max", f);
+            out_calib[f].min_raw = _prefs.getFloat(k_min, 0.0f);
+            out_calib[f].max_raw = _prefs.getFloat(k_max, 4095.0f);
+            out_calib[f].valid   = true;
         }
+        Serial.println("[CALIB] Loaded from NVS.");
+    } else {
+        Serial.println("[CALIB] No valid calibration in NVS.");
     }
+
     _prefs.end();
     return valid;
 }
 
+// ================================================================
+//  clear — erase NVS calibration data
+//  Called by: sensor_task or control_task when recalibrating
+// ================================================================
 void CalibrationSystem::clear() {
     _prefs.begin(PREFS_NAMESPACE, false);
     _prefs.clear();
     _prefs.end();
+    Serial.println("[CALIB] NVS calibration cleared.");
 }

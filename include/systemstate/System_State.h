@@ -8,8 +8,11 @@
 #include <string.h>
 
 // ── Event-group bit definitions ──────────────────────────────────
-#define EVT_CALIB_DONE   (1 << 0)
-#define EVT_ESTOP        (1 << 1)
+#define EVT_CALIB_DONE   (1u << 0)
+#define EVT_ESTOP        (1u << 1)
+#define EVT_BTN1         (1u << 2)
+#define EVT_BTN2         (1u << 3)
+#define EVT_BTN4         (1u << 4)
 
 // ================================================================
 //  SharedState  — singleton, all inter-task communication
@@ -64,33 +67,40 @@ public:
     ManualCalibStep getManualCalibStep();
     void            setManualCalibStep(ManualCalibStep s);
 
-    // Signal from input_task → sensor_task / control_task
-    bool getManualCalibConfirmed();   // user pressed 1:Yes
+    bool getManualCalibConfirmed();
     void setManualCalibConfirmed(bool v);
-    bool getManualCalibMore();        // user pressed 2:More
+    bool getManualCalibMore();
     void setManualCalibMore(bool v);
 
-    // Countdown for manual calib warning screen (3 2 1)
     void setManualCountdown(int sec);
     int  getManualCountdown();
 
-    // Timestamp set when calib finishes (for 2-second auto-return)
     void     setCalibDoneTs(uint32_t ts);
     uint32_t getCalibDoneTs();
 
+    // ── Manual calib ADC snapshot storage ────────────────────────
+    void setManualOpenRaw (const float raw[NUM_FINGERS]);
+    void getManualOpenRaw (float out[NUM_FINGERS]);
+    void setManualCloseRaw(const float raw[NUM_FINGERS]);
+    void getManualCloseRaw(float out[NUM_FINGERS]);
+
+    // ── Manual calib NVS save handshake ──────────────────────────
+    bool isManualSaveDone();
+    void setManualSaveDone(bool v);
+
     // ── Atomic snapshot for display_task ─────────────────────────
     bool readSystemSnapshot(
-        SensorSnapshot& out,
-        SystemMode&     mode,
-        bool&           estop,
-        const char*&    warning,
-        CalibPhase&     calib_phase,
-        bool&           calib_complete,
-        bool&           calib_manual,
-        int&            countdown_sec,
+        SensorSnapshot&  out,
+        SystemMode&      mode,
+        bool&            estop,
+        const char*&     warning,
+        CalibPhase&      calib_phase,
+        bool&            calib_complete,
+        bool&            calib_manual,
+        int&             countdown_sec,
         ManualCalibStep& manual_step,
-        int&            manual_countdown,
-        uint32_t&       calib_done_ts
+        int&             manual_countdown,
+        uint32_t&        calib_done_ts
     );
 
     // ── Event group ───────────────────────────────────────────────
@@ -105,11 +115,11 @@ private:
     bool _take(SemaphoreHandle_t m);
 
     // ── Kernel objects ────────────────────────────────────────────
-    SemaphoreHandle_t _mtx_mode    = nullptr;
-    SemaphoreHandle_t _mtx_sensors = nullptr;
-    SemaphoreHandle_t _mtx_motors  = nullptr;
-    EventGroupHandle_t _events     = nullptr;
-    bool _initialized              = false;
+    SemaphoreHandle_t  _mtx_mode    = nullptr;
+    SemaphoreHandle_t  _mtx_sensors = nullptr;
+    SemaphoreHandle_t  _mtx_motors  = nullptr;
+    EventGroupHandle_t _events      = nullptr;
+    bool               _initialized = false;
 
     // ── Mode-domain fields (guarded by _mtx_mode) ─────────────────
     SystemMode  _mode              = SystemMode::SAFE_LOCK;
@@ -130,6 +140,11 @@ private:
     bool            _manual_calib_more      = false;
     int             _manual_countdown       = 0;
     uint32_t        _calib_done_ts          = 0;
+
+    // Manual calibration ADC snapshot storage
+    float _manual_open_raw [NUM_FINGERS] = {};
+    float _manual_close_raw[NUM_FINGERS] = {};
+    bool  _manual_save_done              = false;
 
     // ── Sensor domain (guarded by _mtx_sensors) ───────────────────
     SensorSnapshot _sensors = {};

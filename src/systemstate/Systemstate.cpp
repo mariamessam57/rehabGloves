@@ -77,22 +77,23 @@ void SharedState::triggerEStop(const char* reason) {
 
 void SharedState::clearEStop() {
     if (_take(_mtx_mode)) {
-        _estop              = false;
-        _calib_complete     = false;
-        _calib_in_progress  = false;
-        _calib_manual_mode  = false;
-        _calib_phase        = CalibPhase::IDLE;
-        _request_recalib    = false;
-        _countdown_sec      = 0;
-        _manual_calib_step  = ManualCalibStep::IDLE;
+        _estop                  = false;
+        _calib_complete         = false;
+        _calib_in_progress      = false;
+        _calib_manual_mode      = false;
+        _calib_phase            = CalibPhase::IDLE;
+        _request_recalib        = false;
+        _countdown_sec          = 0;
+        _manual_calib_step      = ManualCalibStep::IDLE;
         _manual_calib_confirmed = false;
-        _manual_calib_more  = false;
-        _manual_countdown   = 0;
-        _calib_done_ts      = 0;
-        _mode               = SystemMode::SAFE_LOCK;
+        _manual_calib_more      = false;
+        _manual_countdown       = 0;
+        _calib_done_ts          = 0;
+        _manual_save_done       = false;
+        _mode                   = SystemMode::SAFE_LOCK;
         xSemaphoreGive(_mtx_mode);
     }
-    clearEventBits(EVT_ESTOP | EVT_CALIB_DONE);
+    clearEventBits(EVT_ESTOP | EVT_CALIB_DONE | EVT_BTN1 | EVT_BTN2 | EVT_BTN4);
 }
 
 bool SharedState::isEStop() {
@@ -228,19 +229,55 @@ uint32_t SharedState::getCalibDoneTs() {
     return v;
 }
 
+// ─────────────────────────────────── MANUAL CALIB ADC SNAPSHOTS ─
+void SharedState::setManualOpenRaw(const float raw[NUM_FINGERS]) {
+    if (_take(_mtx_mode)) {
+        for (int i = 0; i < NUM_FINGERS; i++) _manual_open_raw[i] = raw[i];
+        xSemaphoreGive(_mtx_mode);
+    }
+}
+void SharedState::getManualOpenRaw(float out[NUM_FINGERS]) {
+    if (_take(_mtx_mode)) {
+        for (int i = 0; i < NUM_FINGERS; i++) out[i] = _manual_open_raw[i];
+        xSemaphoreGive(_mtx_mode);
+    }
+}
+void SharedState::setManualCloseRaw(const float raw[NUM_FINGERS]) {
+    if (_take(_mtx_mode)) {
+        for (int i = 0; i < NUM_FINGERS; i++) _manual_close_raw[i] = raw[i];
+        xSemaphoreGive(_mtx_mode);
+    }
+}
+void SharedState::getManualCloseRaw(float out[NUM_FINGERS]) {
+    if (_take(_mtx_mode)) {
+        for (int i = 0; i < NUM_FINGERS; i++) out[i] = _manual_close_raw[i];
+        xSemaphoreGive(_mtx_mode);
+    }
+}
+
+// ──────────────────────────────────── MANUAL CALIB SAVE HANDSHAKE
+bool SharedState::isManualSaveDone() {
+    bool v = false;
+    if (_take(_mtx_mode)) { v = _manual_save_done; xSemaphoreGive(_mtx_mode); }
+    return v;
+}
+void SharedState::setManualSaveDone(bool v) {
+    if (_take(_mtx_mode)) { _manual_save_done = v; xSemaphoreGive(_mtx_mode); }
+}
+
 // ─────────────────────────────────────── ATOMIC DISPLAY SNAPSHOT ─
 bool SharedState::readSystemSnapshot(
-    SensorSnapshot& out,
-    SystemMode&     mode,
-    bool&           estop,
-    const char*&    warning,
-    CalibPhase&     calib_phase,
-    bool&           calib_complete,
-    bool&           calib_manual,
-    int&            countdown_sec,
+    SensorSnapshot&  out,
+    SystemMode&      mode,
+    bool&            estop,
+    const char*&     warning,
+    CalibPhase&      calib_phase,
+    bool&            calib_complete,
+    bool&            calib_manual,
+    int&             countdown_sec,
     ManualCalibStep& manual_step,
-    int&            manual_countdown,
-    uint32_t&       calib_done_ts)
+    int&             manual_countdown,
+    uint32_t&        calib_done_ts)
 {
     if (!_initialized) return false;
 
@@ -268,8 +305,8 @@ bool SharedState::readSystemSnapshot(
 EventBits_t SharedState::waitEventBits(EventBits_t bits, bool clearOnExit,
                                        bool waitForAll, TickType_t timeout) {
     return xEventGroupWaitBits(_events, bits,
-        clearOnExit  ? pdTRUE : pdFALSE,
-        waitForAll   ? pdTRUE : pdFALSE,
+        clearOnExit ? pdTRUE : pdFALSE,
+        waitForAll  ? pdTRUE : pdFALSE,
         timeout);
 }
 
