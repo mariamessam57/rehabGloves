@@ -8,7 +8,6 @@
 #include <string.h>
 
 // ── Event-group bit definitions ──────────────────────────────────
-#define EVT_CALIB_DONE   (1u << 0)
 #define EVT_ESTOP        (1u << 1)
 #define EVT_BTN1         (1u << 2)
 #define EVT_BTN2         (1u << 3)

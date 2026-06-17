@@ -126,8 +126,12 @@ static void reset_calib_state(SharedState& ss) {
     ss.setManualCountdown(0);
     ss.setCalibDoneTs(0);
     ss.setCalibInProgress(false);
+    ss.setCalibManualMode(false);
     ss.clearRecalibrationRequest();
+    ss.setManualCalibConfirmed(false);
+    ss.setManualCalibMore(false);
     ss.setManualSaveDone(false);
+    ss.clearEventBits(EVT_MANUAL_SAVE_DONE);
     // NOTE: setCalibComplete(true) is NOT reset here — calibration
     // data remains valid until the user explicitly recalibrates.
     Serial.println("[CTRL] Calib state reset.");
@@ -148,7 +152,7 @@ static void reset_calib_state(SharedState& ss) {
 //  [R-3] MOVING states: motors ON, input events ignored.
 //  [R-4] WAIT states: motors OFF, EVT_BTN_CONFIRM/MORE consumed.
 //  [R-5] ADC snapshot taken at confirmation instant only.
-//  [R-6] DONE: emits EVT_CALIB_DONE, holds 2s, then resets FSM.
+//  [R-6] DONE: holds 2s, then resets FSM.
 // ================================================================
 static void modeManualCalib(MotorState out[NUM_FINGERS], SharedState& ss) {
 
@@ -279,7 +283,6 @@ static void modeManualCalib(MotorState out[NUM_FINGERS], SharedState& ss) {
                 ss.setCalibComplete(true);
                 ss.setCalibPhase(CalibPhase::DONE);
                 ss.setCalibDoneTs(xTaskGetTickCount());  // [R-2] tick, not millis
-                ss.setEventBits(EVT_CALIB_DONE);
                 ss.setManualCalibStep(ManualCalibStep::DONE);
                 Serial.println("[CTRL] Save done → DONE");
             }
@@ -373,12 +376,18 @@ static void handleCalibrating(MotorState out[NUM_FINGERS], SharedState& ss) {
     motorsOff(out);
 
     const CalibPhase cp = ss.getCalibPhase();
+    if (cp == CalibPhase::OPEN_HAND || cp == CalibPhase::CLOSE_HAND) {
+        ss.setCalibInProgress(true);
+    } else if (cp == CalibPhase::DONE || cp == CalibPhase::FAILED) {
+        ss.setCalibInProgress(false);
+    }
 
     if (cp == CalibPhase::IDLE) {
         // Waiting for user to choose auto or manual
         if (consume(ss, EVT_CALIB_AUTO)) {
             ss.setCalibManualMode(false);
             ss.setCalibPhase(CalibPhase::OPEN_HAND);
+            ss.setCalibInProgress(true);
             // sensor_task takes over: it detects OPEN_HAND and runs
             // its blocking _collectSamples loop.
             Serial.println("[CTRL] → Auto calib OPEN_HAND");
@@ -392,6 +401,8 @@ static void handleCalibrating(MotorState out[NUM_FINGERS], SharedState& ss) {
         }
     } else if (cp == CalibPhase::DONE) {
         // Auto calibration completed (sensor_task set DONE).
+        // Stop the calibration feed immediately.
+        ss.setCalibInProgress(false);
         // Stamp done timestamp and hold for display.
         static bool done_stamped = false;
         if (!done_stamped) {

@@ -30,8 +30,7 @@
 //                  → resets buffer → setCalibPhase(CLOSE_HAND)
 //    sensor_task: detects phase == CLOSE_HAND → calls addSample() every tick
 //    control_task: CLOSE_HAND timer expires → calls computeCloseHand()
-//                  → calls validate() → if OK: calls save() via sensor_task
-//                                              signals EVT_CALIB_DONE
+//                  → calls validate() → if OK: complete auto calibration.
 //
 //  Wait — save() involves flash write which can take ~5ms.
 //  Calling it from control_task (priority 3) is acceptable.
@@ -99,7 +98,6 @@ void sensor_task(void* pvParam) {
         for (int f = 0; f < NUM_FINGERS; f++) flex[f].setCalib(loaded[f]);
         ss.setCalibComplete(true);
         ss.setCalibPhase(CalibPhase::DONE);
-        ss.setEventBits(EVT_CALIB_DONE);
         Serial.println("[SENSOR] Calibration loaded from NVS.");
     } else {
         // No saved calib: control_task will handle entry into

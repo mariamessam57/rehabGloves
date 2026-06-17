@@ -1,4 +1,5 @@
 #include "systemstate/System_State.h"
+#include "FSM/fsm_events.h"
 #include <Arduino.h>
 
 // ─────────────────────────────────────────────── SINGLETON ──────
@@ -78,7 +79,6 @@ void SharedState::triggerEStop(const char* reason) {
 void SharedState::clearEStop() {
     if (_take(_mtx_mode)) {
         _estop                  = false;
-        _calib_complete         = false;
         _calib_in_progress      = false;
         _calib_manual_mode      = false;
         _calib_phase            = CalibPhase::IDLE;
@@ -93,7 +93,7 @@ void SharedState::clearEStop() {
         _mode                   = SystemMode::SAFE_LOCK;
         xSemaphoreGive(_mtx_mode);
     }
-    clearEventBits(EVT_ESTOP | EVT_CALIB_DONE | EVT_BTN1 | EVT_BTN2 | EVT_BTN4);
+    clearEventBits(EVT_ESTOP | EVT_MANUAL_SAVE_DONE);
 }
 
 bool SharedState::isEStop() {

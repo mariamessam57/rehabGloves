@@ -10,9 +10,8 @@
 //
 //  Writing rules:
 //    input_task   may SET:   EVT_INPUT_* bits only
-//    sensor_task  may SET:   EVT_CALIB_DONE, EVT_MANUAL_SAVE_DONE
+//    sensor_task  may SET:   EVT_MANUAL_SAVE_DONE
 //    control_task may CLEAR: any bit it consumes
-//    control_task may SET:   EVT_CALIB_DONE (after manual calib)
 //    NO OTHER task may set or clear any bit.
 //
 //  Consumption rules:
@@ -24,7 +23,6 @@
 // ================================================================
 
 // ── System lifecycle ─────────────────────────────────────────────
-#define EVT_CALIB_DONE          (1u <<  0)  // set by sensor/control when calib finishes
 #define EVT_ESTOP               (1u <<  1)  // set by SharedState::triggerEStop
 
 // ── Input events from SAFE_LOCK (main menu) ──────────────────────
